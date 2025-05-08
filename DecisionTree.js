@@ -28,6 +28,13 @@ class DecisionTreeNode {
     depth() {
         return this.label !== undefined ? 1 : Math.max(this.leftChild.depth(), this.rightChild.depth()) + 1;
     }
+
+    toString() {
+        if (this.label !== undefined) {
+            return `${this.label}`;
+        }
+        return `${this.condition.attribute}-${this.condition.value}\n${this.leftChild.toString()}\n${this.rightChild.toString()}`;
+    }
 }
 
 function sum(nums) {
@@ -194,6 +201,29 @@ function hunts(X, y, types, labels, maxDepth = Infinity, minInstPerSplit = 2, sa
     );
 }
 
+function parseString(string) {
+    const i = string.indexOf("-");
+    if (i === -1) {
+        return { label: Number(string) || (string === "0" ? 0 : string) };
+    }
+    const value = string.substring(i + 1);
+    return {
+        attribute: Number(string.substring(0, i)),
+        value: Number(value) || (value === "0" ? 0 : value)
+    };
+}
+
+function fromString(stringNodes) {
+    if (stringNodes.length === 1) {
+        return new DecisionTreeNode(undefined, undefined, undefined, parseString(stringNodes[0]).label);
+    }
+    const parsed = parseString(stringNodes.shift());
+    if (parsed.label !== undefined) {
+        return new DecisionTreeNode(undefined, undefined, undefined, parsed.label);
+    }
+    return new DecisionTreeNode(parsed, fromString(stringNodes), fromString(stringNodes));
+}
+
 class DecisionTree {
     static TYPES = { ORDERED: "o", UNORDERED: "u" };
 
@@ -243,5 +273,17 @@ class DecisionTree {
 
     depth() {
         return this.root.depth();
+    }
+
+    toString() {
+        return `${this.types.toString().replaceAll(",", "")}\n${this.root.toString()}`;
+    }
+
+    static fromString(string) {
+        const tree = new DecisionTree();
+        const stringNodes = string.split("\n");
+        tree.types = Array.from(stringNodes.shift());
+        tree.root = fromString(stringNodes);
+        return tree;
     }
 }
