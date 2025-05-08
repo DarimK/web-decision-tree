@@ -16,6 +16,18 @@ class DecisionTreeNode {
         }
         return this.rightChild.evaluate(instance, types);
     }
+
+    nodeCount() {
+        return this.label !== undefined ? 1 : this.leftChild.nodeCount() + this.rightChild.nodeCount() + 1;
+    }
+
+    leafCount() {
+        return this.label !== undefined ? 1 : this.leftChild.leafCount() + this.rightChild.leafCount();
+    }
+
+    depth() {
+        return this.label !== undefined ? 1 : Math.max(this.leftChild.depth(), this.rightChild.depth()) + 1;
+    }
 }
 
 function sum(nums) {
@@ -219,5 +231,17 @@ class DecisionTree {
             return data.map((instance) => this.root.evaluate(instance, this.types));
         }
         return this.root.evaluate(data, this.types);
+    }
+
+    nodeCount() {
+        return this.root.nodeCount();
+    }
+
+    leafCount() {
+        return this.root.leafCount();
+    }
+
+    depth() {
+        return this.root.depth();
     }
 }
