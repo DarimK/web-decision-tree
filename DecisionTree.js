@@ -17,6 +17,17 @@ class DecisionTreeNode {
         return this.rightChild.evaluate(instance, types);
     }
 
+    decisionPath(instance, types) {
+        if (this.label !== undefined) {
+            return `${this.label}`;
+        }
+        if ((types[this.condition.attribute] === DecisionTree.TYPES.ORDERED && instance[this.condition.attribute] <= this.condition.value)
+            || instance[this.condition.attribute] === this.condition.value) {
+            return `${this.condition.attribute}-${this.leftChild.decisionPath(instance, types)}`;
+        }
+        return `${this.condition.attribute}-${this.rightChild.decisionPath(instance, types)}`;
+    }
+
     nodeCount() {
         return this.label !== undefined ? 1 : this.leftChild.nodeCount() + this.rightChild.nodeCount() + 1;
     }
@@ -261,6 +272,13 @@ class DecisionTree {
             return data.map((instance) => this.root.evaluate(instance, this.types));
         }
         return this.root.evaluate(data, this.types);
+    }
+
+    decisionPath(data) {
+        if (typeof data[0] === "object") {
+            return data.map((instance) => this.root.decisionPath(instance, this.types));
+        }
+        return this.root.decisionPath(data, this.types);
     }
 
     nodeCount() {
