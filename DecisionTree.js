@@ -1,4 +1,4 @@
-class DecisionTreeNode {
+class DTNode {
     constructor(condition, leftChild = undefined, rightChild = undefined, label = undefined) {
         this.condition = condition;
         this.leftChild = leftChild;
@@ -23,9 +23,9 @@ class DecisionTreeNode {
         }
         if ((types[this.condition.attribute] === DecisionTree.TYPES.ORDERED && instance[this.condition.attribute] <= this.condition.value)
             || instance[this.condition.attribute] === this.condition.value) {
-            return `${this.condition.attribute}-${this.leftChild.decisionPath(instance, types)}`;
+            return `L-${this.leftChild.decisionPath(instance, types)}`;
         }
-        return `${this.condition.attribute}-${this.rightChild.decisionPath(instance, types)}`;
+        return `R-${this.rightChild.decisionPath(instance, types)}`;
     }
 
     nodeCount() {
@@ -48,191 +48,203 @@ class DecisionTreeNode {
     }
 }
 
-function sum(nums) {
-    let acc = 0;
-    for (const n of nums) {
-        acc += n;
+class DTBuilder {
+    //ngl make small change to dt (hunts) to work for dtreg cuz its just average label
+    static sum(nums) {
+        let acc = 0;
+        for (const n of nums) {
+            acc += n;
+        }
+        return acc;
     }
-    return acc;
-}
 
-function entropy(freq) {
-    let acc = 0;
-    let total = sum(freq);
-    for (const f of freq) {
-        acc -= f === 0 ? 0 : f / total * Math.log2(f / total);
+    static entropy(freq) {
+        let acc = 0;
+        let total = DTBuilder.sum(freq);
+        for (const f of freq) {
+            acc -= f === 0 ? 0 : f / total * Math.log2(f / total);
+        }
+        return acc;
     }
-    return acc;
-}
 
-function infoGain(parentFreq, childrenFreq) {
-    let acc = entropy(parentFreq);
-    let total = sum(parentFreq);
-    for (const freq of childrenFreq) {
-        acc -= sum(freq) / total * entropy(freq);
+    static infoGain(parentFreq, childrenFreq) {
+        let acc = DTBuilder.entropy(parentFreq);
+        let total = DTBuilder.sum(parentFreq);
+        for (const freq of childrenFreq) {
+            acc -= DTBuilder.sum(freq) / total * DTBuilder.entropy(freq);
+        }
+        return acc;
     }
-    return acc;
-}
 
-function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-}
-
-function splitOptions(X, sampleSizeMethod) {
-    const sampleSize = Math.ceil(sampleSizeMethod(X.length));
-    const attrOptions = [];
-    const idxArr = [];
-    for (let i = 0; i < X.length; i++) {
-        idxArr[i] = i;
-    }
-    shuffle(idxArr);
-    for (let attrIdx = 0; attrIdx < X[0].length; attrIdx++) {
-        attrOptions.push(new Set());
-        for (let i = 0; i < sampleSize; i++) {
-            attrOptions[attrIdx].add(X[idxArr[i]][attrIdx]);
+    static shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
         }
     }
-    return attrOptions;
-}
 
-function splitConditions(attrOptions) {
-    const attrConditions = [];
-    for (let attrIdx = 0; attrIdx < attrOptions.length; attrIdx++) {
-        const splits = Array.from(attrOptions[attrIdx]).sort();
-        for (let valIdx = 0; valIdx < splits.length - 1; valIdx++) {
-            attrConditions.push({
-                attribute: attrIdx,
-                value: splits[valIdx]
-            });
+    static splitOptions(X, sampleSizeMethod) {
+        const sampleSize = Math.ceil(sampleSizeMethod(X.length));
+        const attrOptions = [];
+        const idxArr = [];
+        for (let i = 0; i < X.length; i++) {
+            idxArr[i] = i;
         }
-    }
-    return attrConditions;
-}
-
-function splitOnCondition(X, y, type, condition, dontSplitX = false) {
-    const split1 = { X: [], y: [] };
-    const split2 = { X: [], y: [] };
-    if (dontSplitX && type === DecisionTree.TYPES.ORDERED) {
-        for (let instIdx = 0; instIdx < X.length; instIdx++) {
-            if (X[instIdx][condition.attribute] <= condition.value) {
-                split1.y.push(y[instIdx]);
-            } else {
-                split2.y.push(y[instIdx]);
+        DTBuilder.shuffle(idxArr);
+        for (let attrIdx = 0; attrIdx < X[0].length; attrIdx++) {
+            attrOptions.push(new Set());
+            for (let i = 0; i < sampleSize; i++) {
+                attrOptions[attrIdx].add(X[idxArr[i]][attrIdx]);
             }
         }
-    } else if (dontSplitX) {
-        for (let instIdx = 0; instIdx < X.length; instIdx++) {
-            if (X[instIdx][condition.attribute] === condition.value) {
-                split1.y.push(y[instIdx]);
-            } else {
-                split2.y.push(y[instIdx]);
+        return attrOptions;
+    }
+
+    static splitConditions(attrOptions) {
+        const attrConditions = [];
+        for (let attrIdx = 0; attrIdx < attrOptions.length; attrIdx++) {
+            const splits = Array.from(attrOptions[attrIdx]).sort();
+            for (let valIdx = 0; valIdx < splits.length - 1; valIdx++) {
+                attrConditions.push({
+                    attribute: attrIdx,
+                    value: splits[valIdx]
+                });
             }
         }
-    } else if (type === DecisionTree.TYPES.ORDERED) {
-        for (let instIdx = 0; instIdx < X.length; instIdx++) {
-            if (X[instIdx][condition.attribute] <= condition.value) {
-                split1.X.push(X[instIdx]);
-                split1.y.push(y[instIdx]);
-            } else {
-                split2.X.push(X[instIdx]);
-                split2.y.push(y[instIdx]);
+        return attrConditions;
+    }
+
+    static splitOnCondition(X, y, type, condition) {
+        const split1 = { X: [], y: [] };
+        const split2 = { X: [], y: [] };
+        if (type === DecisionTree.TYPES.ORDERED) {
+            for (let instIdx = 0; instIdx < X.length; instIdx++) {
+                if (X[instIdx][condition.attribute] <= condition.value) {
+                    split1.X.push(X[instIdx]);
+                    split1.y.push(y[instIdx]);
+                } else {
+                    split2.X.push(X[instIdx]);
+                    split2.y.push(y[instIdx]);
+                }
+            }
+        } else {
+            for (let instIdx = 0; instIdx < X.length; instIdx++) {
+                if (X[instIdx][condition.attribute] === condition.value) {
+                    split1.X.push(X[instIdx]);
+                    split1.y.push(y[instIdx]);
+                } else {
+                    split2.X.push(X[instIdx]);
+                    split2.y.push(y[instIdx]);
+                }
             }
         }
-    } else {
-        for (let instIdx = 0; instIdx < X.length; instIdx++) {
-            if (X[instIdx][condition.attribute] === condition.value) {
-                split1.X.push(X[instIdx]);
-                split1.y.push(y[instIdx]);
-            } else {
-                split2.X.push(X[instIdx]);
-                split2.y.push(y[instIdx]);
+        return [split1, split2];
+    }
+
+    static countLabels(y, labels) {
+        const counts = [];
+        for (let i = 0; i < labels.size; i++) {
+            counts[i] = 0;
+        }
+        for (const label of y) {
+            counts[label]++;
+        }
+        return counts;
+    }
+
+    static splitAndCount(X, y, type, labels, condition) {
+        const counts1 = [];
+        const counts2 = [];
+        for (let i = 0; i < labels.size; i++) {
+            counts1[i] = 0;
+            counts2[i] = 0;
+        }
+        if (type === DecisionTree.TYPES.ORDERED) {
+            for (let instIdx = 0; instIdx < X.length; instIdx++) {
+                if (X[instIdx][condition.attribute] <= condition.value) {
+                    counts1[y[instIdx]]++;
+                } else {
+                    counts2[y[instIdx]]++;
+                }
+            }
+        } else {
+            for (let instIdx = 0; instIdx < X.length; instIdx++) {
+                if (X[instIdx][condition.attribute] === condition.value) {
+                    counts1[y[instIdx]]++;
+                } else {
+                    counts2[y[instIdx]]++;
+                }
             }
         }
+        return [counts1, counts2];
     }
-    return [split1, split2];
-}
 
-function countLabels(y, labels) {
-    const counts = [];
-    for (let i = 0; i < labels.size; i++) {
-        counts[i] = 0;
-    }
-    for (const label of y) {
-        counts[label]++;
-    }
-    return counts;
-}
-
-function bestSplitCondition(X, y, types, labels, sampleSizeMethod) {
-    const options = splitOptions(X, sampleSizeMethod);
-    const conditions = splitConditions(options);
-    const parentFreq = countLabels(y, labels);
-    let bestCondition = undefined;
-    let bestGain = 0;
-    for (let condIdx = 0; condIdx < conditions.length; condIdx++) {
-        const [split1, split2] = splitOnCondition(X, y, types[conditions[condIdx].attribute], conditions[condIdx], true);
-        const split1Freq = countLabels(split1.y, labels);
-        const split2Freq = countLabels(split2.y, labels);
-        const splitGain = infoGain(parentFreq, [split1Freq, split2Freq]);
-        if (splitGain > bestGain) {
-            bestCondition = conditions[condIdx];
-            bestGain = splitGain;
+    static bestSplitCondition(X, y, types, labels, sampleSizeMethod) {
+        const options = DTBuilder.splitOptions(X, sampleSizeMethod);
+        const conditions = DTBuilder.splitConditions(options);
+        const parentFreq = DTBuilder.countLabels(y, labels);
+        let bestCondition = undefined;
+        let bestGain = 0;
+        for (let condIdx = 0; condIdx < conditions.length; condIdx++) {
+            const childrenFreq = DTBuilder.splitAndCount(X, y, types[conditions[condIdx].attribute], labels, conditions[condIdx]);
+            const splitGain = DTBuilder.infoGain(parentFreq, childrenFreq);
+            if (splitGain > bestGain) {
+                bestCondition = conditions[condIdx];
+                bestGain = splitGain;
+            }
         }
+        return bestCondition;
     }
-    return bestCondition;
-}
 
-function maxIdx(nums) {
-    let m = 0;
-    for (let i = 0; i < nums.length; i++) {
-        m = nums[i] > nums[m] ? i : m;
+    static maxIdx(nums) {
+        let m = 0;
+        for (let i = 0; i < nums.length; i++) {
+            m = nums[i] > nums[m] ? i : m;
+        }
+        return m;
     }
-    return m;
-}
 
-function hunts(X, y, types, labels, maxDepth = Infinity, minInstPerSplit = 2, sampleSizeMethod = (n) => n, depth = 0) {
-    if ((new Set(y)).size === 1) {
-        return new DecisionTreeNode(undefined, undefined, undefined, labels.get(y[0]));
+    static hunts(X, y, types, labels, maxDepth = Infinity, minInstPerSplit = 2, sampleSizeMethod = (n) => n, depth = 0) {
+        if ((new Set(y)).size === 1) {
+            return new DTNode(undefined, undefined, undefined, labels.get(y[0]));
+        }
+        if (depth >= maxDepth || y.length < minInstPerSplit) {
+            return new DTNode(undefined, undefined, undefined, labels.get(DTBuilder.maxIdx(DTBuilder.countLabels(y, labels))));
+        }
+        const bestCondition = DTBuilder.bestSplitCondition(X, y, types, labels, sampleSizeMethod);
+        if (!bestCondition) {
+            return new DTNode(undefined, undefined, undefined, labels.get(DTBuilder.maxIdx(DTBuilder.countLabels(y, labels))));
+        }
+        const [split1, split2] = DTBuilder.splitOnCondition(X, y, types[bestCondition.attribute], bestCondition);
+        return new DTNode(
+            bestCondition,
+            DTBuilder.hunts(split1.X, split1.y, types, labels, maxDepth, minInstPerSplit, sampleSizeMethod, depth + 1),
+            DTBuilder.hunts(split2.X, split2.y, types, labels, maxDepth, minInstPerSplit, sampleSizeMethod, depth + 1)
+        );
     }
-    if (depth >= maxDepth || y.length < minInstPerSplit) {
-        return new DecisionTreeNode(undefined, undefined, undefined, labels.get(maxIdx(countLabels(y, labels))));
-    }
-    const bestCondition = bestSplitCondition(X, y, types, labels, sampleSizeMethod);
-    if (!bestCondition) {
-        return new DecisionTreeNode(undefined, undefined, undefined, labels.get(maxIdx(countLabels(y, labels))));
-    }
-    const [split1, split2] = splitOnCondition(X, y, types[bestCondition.attribute], bestCondition);
-    return new DecisionTreeNode(
-        bestCondition,
-        hunts(split1.X, split1.y, types, labels, maxDepth, minInstPerSplit, sampleSizeMethod, depth + 1),
-        hunts(split2.X, split2.y, types, labels, maxDepth, minInstPerSplit, sampleSizeMethod, depth + 1)
-    );
-}
 
-function parseString(string) {
-    const i = string.indexOf("-");
-    if (i === -1) {
-        return { label: Number(string) || (string === "0" ? 0 : string) };
+    static parseString(string) {
+        const i = string.indexOf("-");
+        if (i === -1) {
+            return { label: Number(string) || (string === "0" ? 0 : string) };
+        }
+        const value = string.substring(i + 1);
+        return {
+            attribute: Number(string.substring(0, i)),
+            value: Number(value) || (value === "0" ? 0 : value)
+        };
     }
-    const value = string.substring(i + 1);
-    return {
-        attribute: Number(string.substring(0, i)),
-        value: Number(value) || (value === "0" ? 0 : value)
-    };
-}
 
-function fromString(stringNodes) {
-    if (stringNodes.length === 1) {
-        return new DecisionTreeNode(undefined, undefined, undefined, parseString(stringNodes[0]).label);
+    static fromString(stringNodes) {
+        if (stringNodes.length === 1) {
+            return new DTNode(undefined, undefined, undefined, DTBuilder.parseString(stringNodes[0]).label);
+        }
+        const parsed = DTBuilder.parseString(stringNodes.shift());
+        if (parsed.label !== undefined) {
+            return new DTNode(undefined, undefined, undefined, parsed.label);
+        }
+        return new DTNode(parsed, DTBuilder.fromString(stringNodes), DTBuilder.fromString(stringNodes));
     }
-    const parsed = parseString(stringNodes.shift());
-    if (parsed.label !== undefined) {
-        return new DecisionTreeNode(undefined, undefined, undefined, parsed.label);
-    }
-    return new DecisionTreeNode(parsed, fromString(stringNodes), fromString(stringNodes));
 }
 
 class DecisionTree {
@@ -264,7 +276,7 @@ class DecisionTree {
             i++;
         }
         const yTransformed = y.map((label) => labelsInverted.get(label));
-        this.root = hunts(X, yTransformed, this.types, labels, maxDepth, minInstPerSplit, sampleSizeMethod);
+        this.root = DTBuilder.hunts(X, yTransformed, this.types, labels, maxDepth, minInstPerSplit, sampleSizeMethod);
     }
 
     evaluate(data) {
@@ -301,7 +313,7 @@ class DecisionTree {
         const tree = new DecisionTree();
         const stringNodes = string.split("\n");
         tree.types = Array.from(stringNodes.shift());
-        tree.root = fromString(stringNodes);
+        tree.root = DTBuilder.fromString(stringNodes);
         return tree;
     }
 }
