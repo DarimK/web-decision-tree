@@ -68,6 +68,38 @@ class MethodTracker {
     }
 }
 
+
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+}
+
+function trainTestSplit(X, y, testSize = 0.2, random = true) {
+    const idxs = [];
+    for (let i = 0; i < X.length; i++) {
+        idxs.push(i);
+    }
+    if (random) {
+        shuffle(idxs);
+    }
+
+    const xTest = [], yTest = [];
+    for (let i = 0; i < Math.floor(X.length * testSize); i++) {
+        xTest.push(X[idxs[i]]);
+        yTest.push(y[idxs[i]]);
+    }
+
+    const xTrain = [], yTrain = [];
+    for (let i = Math.floor(X.length * testSize); i < X.length; i++) {
+        xTrain.push(X[idxs[i]]);
+        yTrain.push(y[idxs[i]]);
+    }
+
+    return [xTrain, xTest, yTrain, yTest];
+}
+
 function accuracy(predictions, y) {
     let matches = 0;
     for (let i = 0; i < y.length; i++) {
