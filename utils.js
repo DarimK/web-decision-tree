@@ -69,6 +69,26 @@ class MethodTracker {
 }
 
 
+function readCSV(file, callback) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const text = event.target.result;
+        const data = text.split('\n').map((row) => row.replace('\r', '').split(','));
+        callback({
+            names: data[0],
+            X: data.slice(1).map((row) => row.slice(0, -1)),
+            y: data.slice(1).map((row) => row.slice(-1)[0])
+        });
+    };
+    reader.readAsText(file);
+}
+
+function cleanData(X, y) {
+    X = X.map((row) => row.map((val) => Number(val) ? Number(val) : val));
+    y = y.map((val) => Number(val) ? Number(val) : val);
+    return [X, y];
+}
+
 function shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
