@@ -8,7 +8,35 @@
 </head>
 
 <body>
+    <div>
+        <input type="file" id="file" accept=".csv">
+        <button id="load">Load File</button>
+    </div>
+
+    <div>
+        <label for="test-size">Percent of data reserved for testing</label>
+        <input id="test-size" type="text" placeholder="0.2" value="0.2">
+        <button id="train">Train</button>
+    </div>
+
+    <div>
+        <button id="test">Test tree</button>
+        <span id="accuracy"></span>
+    </div>
+
+    <div>
+        <label for="instance">Enter an instance, with values sepeated by commas</label>
+        <input id="instance" type="text">
+        <button id="classify">Classify</button>
+    </div>
+
+    <div>
+        <span id="classification"></span>
+    </div>
+
     <script src="DecisionTree.js"></script>
+    <script src="utils.js"></script>
+    <script src="script.js"></script>
 </body>
 
 </html>
