@@ -31,7 +31,7 @@ class Graphics {
         const zIndex = this.figures[id].zIndex;
         this.zIndexLayers[zIndex].splice(this.zIndexLayers[zIndex].indexOf(id), 1);
         if (this.zIndexLayers[zIndex].length === 0) {
-            this.zIndexLayers.splice(zIndex, 1);
+            delete this.zIndexLayers[zIndex];
         }
         delete this.figures[id];
     }
@@ -55,6 +55,14 @@ class Graphics {
         return this.#add({ type: "line", x1, y1, x2, y2, width, color, zIndex });
     }
 
+    addText(x, y, text, font = "sans-serif", fontHeight = 16, maxWidth, color = "black", zIndex = 0) {
+        const fontString = `${font} ${fontHeight}px`;
+        this.ctx.font = fontString;
+        let width = this.ctx.measureText(text).width;
+        if (maxWidth < width) width = maxWidth;
+        return this.#add({ type: "text", x, y, width, height: fontHeight, text, font: fontString, color, zIndex });
+    }
+
     update() {
         const { ctx, camera } = this;
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -63,6 +71,8 @@ class Graphics {
         ctx.scale(camera.zoom, camera.zoom);
 
         for (const layer of this.zIndexLayers) {
+            if (layer === undefined) continue;
+
             for (const id of layer) {
                 const figure = this.figures[id];
                 ctx.fillStyle = figure.color;
@@ -99,6 +109,9 @@ class Graphics {
                     ctx.moveTo(figure.x1, figure.y1);
                     ctx.lineTo(figure.x2, figure.y2);
                     ctx.stroke();
+                } else if (figure.type === "text") {
+                    ctx.font = figure.font;
+                    ctx.fillText(figure.text, figure.x - figure.width / 2, figure.y + figure.height / 2, figure.width);
                 }
             }
         }
