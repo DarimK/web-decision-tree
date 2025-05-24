@@ -43,6 +43,24 @@ class Graphics {
         this.setCamera(0, 0, 1);
     }
 
+    #getTextRows(text, maxWidth) {
+        const words = text.split(" ");
+        const rows = [];
+        let newRow = words[0];
+
+        for (let i = 1; i < words.length; i++) {
+            if (this.ctx.measureText(newRow + " " + words[i]).width < maxWidth) {
+                newRow += " " + words[i];
+            } else {
+                rows.push(newRow);
+                newRow = words[i];
+            }
+        }
+
+        rows.push(newRow);
+        return rows;
+    }
+
     addRectangle(x, y, width, height, borderWidth = 0, color = "black", borderColor = "black", zIndex = 0) {
         return this.#add({ type: "rect", x, y, width, height, borderWidth, color, borderColor, zIndex });
     }
@@ -55,12 +73,14 @@ class Graphics {
         return this.#add({ type: "line", x1, y1, x2, y2, width, color, zIndex });
     }
 
-    addText(x, y, text, font = "sans-serif", fontHeight = 16, maxWidth, color = "black", zIndex = 0) {
-        const fontString = `${font} ${fontHeight}px`;
-        this.ctx.font = fontString;
-        let width = this.ctx.measureText(text).width;
-        if (maxWidth < width) width = maxWidth;
-        return this.#add({ type: "text", x, y, width, height: fontHeight, text, font: fontString, color, zIndex });
+    addText(x, y, text, font = "16px sans-serif", maxWidth, color = "black", zIndex = 0) {
+        this.ctx.font = font;
+        const metrics = this.ctx.measureText(text);
+        return this.#add({
+            type: "text", x, y, font, color, zIndex,
+            textRows: this.#getTextRows(text, maxWidth),
+            height: metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+        });
     }
 
     update() {
@@ -69,6 +89,9 @@ class Graphics {
         ctx.save();
         ctx.translate(-camera.x * camera.zoom + this.canvas.width / 2, -camera.y * camera.zoom + this.canvas.height / 2);
         ctx.scale(camera.zoom, camera.zoom);
+        //for now
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
 
         for (const layer of this.zIndexLayers) {
             if (layer === undefined) continue;
@@ -111,7 +134,11 @@ class Graphics {
                     ctx.stroke();
                 } else if (figure.type === "text") {
                     ctx.font = figure.font;
-                    ctx.fillText(figure.text, figure.x - figure.width / 2, figure.y + figure.height / 2, figure.width);
+                    let y = figure.y;
+                    for (const row of figure.textRows) {
+                        ctx.fillText(row, figure.x, y);
+                        y += figure.height;
+                    }
                 }
             }
         }
