@@ -4,19 +4,33 @@ class Graphics {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext("2d");
-        this.figures = {};
-        this.zIndexLayers = [];
-        this.camera = { x: 0, y: 0, zoom: 1 };
-        this.nextId = 0;
+        this.reset();
     }
 
     setCamera(x, y, zoom) {
+        this.stateChanged = true;
         this.camera.x = x;
         this.camera.y = y;
         this.camera.zoom = zoom ?? this.camera.zoom;
+        this.camera.bounds = {
+            xL: this.camera.x - this.canvas.width / this.camera.zoom / 2,
+            xR: this.camera.x + this.canvas.width / this.camera.zoom / 2,
+            yL: this.camera.y - this.canvas.height / this.camera.zoom / 2,
+            yR: this.camera.y + this.canvas.height / this.camera.zoom / 2,
+        };
+    }
+
+    reset() {
+        this.figures = {};
+        this.zIndexLayers = [];
+        this.camera = {};
+        this.setCamera(0, 0, 1);
+        this.nextId = 0;
+        this.stateChanged = false;
     }
 
     #add(data) {
+        this.stateChanged = true;
         this.figures[this.nextId] = data;
         data.zIndex = data.zIndex > Graphics.MAX_Z_INDEX ? Graphics.MAX_Z_INDEX : data.zIndex;
         if (this.zIndexLayers[data.zIndex]) {
@@ -28,19 +42,13 @@ class Graphics {
     }
 
     remove(id) {
+        this.stateChanged = true;
         const zIndex = this.figures[id].zIndex;
         this.zIndexLayers[zIndex].splice(this.zIndexLayers[zIndex].indexOf(id), 1);
         if (this.zIndexLayers[zIndex].length === 0) {
             delete this.zIndexLayers[zIndex];
         }
         delete this.figures[id];
-    }
-
-    reset() {
-        this.figures = {};
-        this.zIndexLayers = [];
-        this.nextId = 0;
-        this.setCamera(0, 0, 1);
     }
 
     #getTextRows(text, maxWidth) {
@@ -83,7 +91,11 @@ class Graphics {
         });
     }
 
+    //remove all math to boost performance on frequent updates
     update() {
+        if (this.stateChanged) this.stateChanged = false;
+        else return;
+
         const { ctx, camera } = this;
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         ctx.save();
@@ -98,6 +110,8 @@ class Graphics {
 
             for (const id of layer) {
                 const figure = this.figures[id];
+                if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xR
+                    || figure.y < camera.bounds.yL || figure.y > camera.bounds.yR) continue;
                 ctx.fillStyle = figure.color;
                 ctx.strokeStyle = figure.borderColor ?? figure.color;
 
