@@ -1,38 +1,62 @@
 class Graphics {
     static MAX_Z_INDEX = 99;
 
-    constructor(canvas) {
+    constructor(canvas, caching = true) {
         this.canvas = canvas;
+        this.caching = caching;
         this.ctx = canvas.getContext("2d");
-        this.reset();
-    }
-
-    setCamera(x, y, zoom) {
-        this.stateChanged = true;
-        this.camera.x = x;
-        this.camera.y = y;
-        this.camera.zoom = zoom ?? this.camera.zoom;
-        this.camera.bounds = {
-            xL: this.camera.x - this.canvas.width / this.camera.zoom / 2,
-            xR: this.camera.x + this.canvas.width / this.camera.zoom / 2,
-            yL: this.camera.y - this.canvas.height / this.camera.zoom / 2,
-            yR: this.camera.y + this.canvas.height / this.camera.zoom / 2,
+        // if (caching) {
+        const offscreenCanvas = document.createElement("canvas"); offscreenCanvas.width = canvas.width * 4; offscreenCanvas.height = canvas.height * 4//new OffscreenCanvas(canvas.width * 4, canvas.height * 4);
+        this.cache = {
+            canvas: offscreenCanvas,
+            ctx: offscreenCanvas.getContext("2d")
         };
+        // }
+        this.reset();
     }
 
     reset() {
         this.figures = {};
         this.zIndexLayers = [];
         this.camera = {};
+        if (this.caching) this.cache.camera = {};
         this.setCamera(0, 0, 1);
         this.nextId = 0;
-        this.stateChanged = false;
+    }
+
+    resize(width, height) {
+        this.canvas.width = width ?? this.canvas.width;
+        this.canvas.height = height ?? this.canvas.height;
+        this.cache.canvas.width = (width ?? this.canvas.width) * 4;
+        this.cache.canvas.height = (height ?? this.canvas.height) * 4;
+    }
+
+    #setCamera(canvas, camera, x, y, zoom) {
+        camera.x = x;
+        camera.y = y;
+        camera.zoom = zoom ?? camera.zoom;
+        camera.bounds = {
+            xL: camera.x - canvas.width / camera.zoom / 2,
+            xR: camera.x + canvas.width / camera.zoom / 2,
+            yL: camera.y - canvas.height / camera.zoom / 2,
+            yR: camera.y + canvas.height / camera.zoom / 2,
+        };
+    }
+
+    setCamera(x, y, zoom) {
+        if (!this.stateChanged) this.stateChanged = "camera";
+        if (this.caching) {
+            this.#setCamera(this.canvas, this.camera, x, y, zoom);
+            this.#setCamera(this.cache.canvas, this.cache.camera, x, y, zoom);
+        } else {
+            this.#setCamera(this.canvas, this.camera, x, y, zoom);
+        }
     }
 
     #add(data) {
-        this.stateChanged = true;
+        this.stateChanged = "figure";
         this.figures[this.nextId] = data;
-        data.zIndex = data.zIndex > Graphics.MAX_Z_INDEX ? Graphics.MAX_Z_INDEX : data.zIndex;
+        data.zIndex = data.zIndex > Graphics.MAX_Z_INDEX ? Graphics.MAX_Z_INDEX : data.zIndex;//min
         if (this.zIndexLayers[data.zIndex]) {
             this.zIndexLayers[data.zIndex].push(this.nextId);
         } else {
@@ -42,7 +66,7 @@ class Graphics {
     }
 
     remove(id) {
-        this.stateChanged = true;
+        this.stateChanged = "figure";
         const zIndex = this.figures[id].zIndex;
         this.zIndexLayers[zIndex].splice(this.zIndexLayers[zIndex].indexOf(id), 1);
         if (this.zIndexLayers[zIndex].length === 0) {
@@ -92,14 +116,11 @@ class Graphics {
     }
 
     //remove all math to boost performance on frequent updates
-    update() {
-        if (this.stateChanged) this.stateChanged = false;
-        else return;
-
-        const { ctx, camera } = this;
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    #update(graphics) {
+        const { canvas, ctx, camera } = graphics;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.save();
-        ctx.translate(-camera.x * camera.zoom + this.canvas.width / 2, -camera.y * camera.zoom + this.canvas.height / 2);
+        ctx.translate(-camera.x * camera.zoom + canvas.width / 2, -camera.y * camera.zoom + canvas.height / 2);
         ctx.scale(camera.zoom, camera.zoom);
         //for now
         ctx.textAlign = "center";
@@ -110,8 +131,8 @@ class Graphics {
 
             for (const id of layer) {
                 const figure = this.figures[id];
-                if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xR
-                    || figure.y < camera.bounds.yL || figure.y > camera.bounds.yR) continue;
+                // if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xR
+                //     || figure.y < camera.bounds.yL || figure.y > camera.bounds.yR) continue;
                 ctx.fillStyle = figure.color;
                 ctx.strokeStyle = figure.borderColor ?? figure.color;
 
@@ -158,5 +179,38 @@ class Graphics {
         }
 
         ctx.restore();
+    }
+
+    update() {
+        if (!this.stateChanged) return;
+
+        if (this.caching) {
+            const { canvas, ctx, camera } = this;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-camera.x * camera.zoom + canvas.width / 2, -camera.y * camera.zoom + canvas.height / 2);
+            ctx.scale(camera.zoom, camera.zoom);
+            if (!this.cache.bitmap || this.stateChanged === "figure"
+                || camera.bounds.xL < this.cache.bounds.xL || camera.bounds.xR > this.cache.bounds.xR
+                || camera.bounds.yL < this.cache.bounds.yL || camera.bounds.yR > this.cache.bounds.yR
+                || this.cache.data.width / Math.abs(camera.bounds.xR - camera.bounds.xL) > 8) {
+                this.#update(this.cache);
+                // if (this.cache.bitmap) this.cache.bitmap.close();
+                this.cache.bitmap = this.cache.canvas;//.transferToImageBitmap();
+                this.cache.data = { x: camera.x, y: camera.y, width: this.cache.bitmap.width / camera.zoom, height: this.cache.bitmap.height / camera.zoom };
+                this.cache.bounds = {
+                    xL: this.cache.data.x - this.cache.data.width / 2,
+                    xR: this.cache.data.x + this.cache.data.width / 2,
+                    yL: this.cache.data.y - this.cache.data.height / 2,
+                    yR: this.cache.data.y + this.cache.data.height / 2,
+                };
+            }
+            this.ctx.drawImage(this.cache.bitmap, this.cache.bounds.xL, this.cache.bounds.yL, this.cache.data.width, this.cache.data.height);
+            ctx.restore();
+        } else {
+            this.#update(this);
+        }
+
+        delete this.stateChanged;
     }
 }
