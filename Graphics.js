@@ -22,6 +22,7 @@ class Graphics {
         if (this.caching) this.cache.camera = {};
         this.setCamera(0, 0, 1);
         this.nextId = 0;
+        this.frame = 0;
     }
 
     resize(width, height) {
@@ -44,12 +45,10 @@ class Graphics {
     }
 
     setCamera(x, y, zoom) {
-        if (!this.stateChanged) this.stateChanged = "camera";
+        if (!this.stateChanged && (x !== this.camera.x || y !== this.camera.y || zoom !== this.camera.zoom)) this.stateChanged = "camera";
+        this.#setCamera(this.canvas, this.camera, x, y, zoom);
         if (this.caching) {
-            this.#setCamera(this.canvas, this.camera, x, y, zoom);
             this.#setCamera(this.cache.canvas, this.cache.camera, x, y, zoom);
-        } else {
-            this.#setCamera(this.canvas, this.camera, x, y, zoom);
         }
     }
 
@@ -116,8 +115,10 @@ class Graphics {
     }
 
     //remove all math to boost performance on frequent updates
-    #update(graphics) {
+    #update(graphics, callback) {
+        this.frame++;
         const { canvas, ctx, camera } = graphics;
+        ctx.restore();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.save();
         ctx.translate(-camera.x * camera.zoom + canvas.width / 2, -camera.y * camera.zoom + canvas.height / 2);
@@ -126,11 +127,22 @@ class Graphics {
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
 
-        for (const layer of this.zIndexLayers) {
-            if (layer === undefined) continue;
+        let maxBatchTime = 5, layerIdx = 0, idIdx = 0;
 
-            for (const id of layer) {
-                const figure = this.figures[id];
+        function updateBatch(figures, zIndexLayers, graphics, frame) {
+            if (layerIdx >= zIndexLayers.length || frame !== graphics.frame) {
+                if (callback) callback();
+                return;
+            }
+
+            let start = Date.now();
+            while (layerIdx < zIndexLayers.length && Date.now() - start < maxBatchTime) {
+                if (zIndexLayers[layerIdx] === undefined) {
+                    layerIdx++;
+                    continue;
+                }
+
+                const figure = figures[zIndexLayers[layerIdx][idIdx]];
                 // if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xR
                 //     || figure.y < camera.bounds.yL || figure.y > camera.bounds.yR) continue;
                 ctx.fillStyle = figure.color;
@@ -175,29 +187,43 @@ class Graphics {
                         y += figure.height;
                     }
                 }
+
+                idIdx++;
+                if (idIdx >= zIndexLayers[layerIdx].length) {
+                    idIdx = 0;
+                    layerIdx++;
+                }
             }
+
+            setTimeout(() => {
+                updateBatch(figures, zIndexLayers, graphics, frame);
+            }, 0);
         }
 
-        ctx.restore();
+        updateBatch(this.figures, this.zIndexLayers, graphics, graphics.frame);
     }
 
     update() {
-        if (!this.stateChanged) return;
+        if (!this.stateChanged && !this.cache.working) return;
 
         if (this.caching) {
             const { canvas, ctx, camera } = this;
+            ctx.restore();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
             ctx.translate(-camera.x * camera.zoom + canvas.width / 2, -camera.y * camera.zoom + canvas.height / 2);
             ctx.scale(camera.zoom, camera.zoom);
-            if (!this.cache.bitmap || this.stateChanged === "figure"
+            if (!this.cache.working && (!this.cache.bitmap || this.stateChanged === "figure"
                 || camera.bounds.xL < this.cache.bounds.xL || camera.bounds.xR > this.cache.bounds.xR
                 || camera.bounds.yL < this.cache.bounds.yL || camera.bounds.yR > this.cache.bounds.yR
-                || this.cache.data.width / Math.abs(camera.bounds.xR - camera.bounds.xL) > 8) {
-                this.#update(this.cache);
-                // if (this.cache.bitmap) this.cache.bitmap.close();
-                this.cache.bitmap = this.cache.canvas;//.transferToImageBitmap();
-                this.cache.data = { x: camera.x, y: camera.y, width: this.cache.bitmap.width / camera.zoom, height: this.cache.bitmap.height / camera.zoom };
+                || this.cache.data.width / Math.abs(camera.bounds.xR - camera.bounds.xL) > 8)) {
+                this.cache.working = true;
+                this.#update(this.cache, () => {
+                    // if (this.cache.bitmap) this.cache.bitmap.close();
+                    this.cache.bitmap = this.cache.canvas;//.transferToImageBitmap();
+                    this.cache.working = false;
+                });
+                this.cache.data = { x: camera.x, y: camera.y, width: this.cache.canvas.width / camera.zoom, height: this.cache.canvas.height / camera.zoom };
                 this.cache.bounds = {
                     xL: this.cache.data.x - this.cache.data.width / 2,
                     xR: this.cache.data.x + this.cache.data.width / 2,
@@ -205,8 +231,7 @@ class Graphics {
                     yR: this.cache.data.y + this.cache.data.height / 2,
                 };
             }
-            this.ctx.drawImage(this.cache.bitmap, this.cache.bounds.xL, this.cache.bounds.yL, this.cache.data.width, this.cache.data.height);
-            ctx.restore();
+            if (this.cache.bitmap) this.ctx.drawImage(this.cache.bitmap, this.cache.bounds.xL, this.cache.bounds.yL, this.cache.data.width, this.cache.data.height);
         } else {
             this.#update(this);
         }
