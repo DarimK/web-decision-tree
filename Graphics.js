@@ -1,17 +1,19 @@
 class Graphics {
     static MAX_Z_INDEX = 99;
+    #caching = true;
 
     constructor(canvas, caching = true) {
         this.canvas = canvas;
-        this.caching = caching;
+        this.#caching = caching;
         this.ctx = canvas.getContext("2d");
-        // if (caching) {
-        const offscreenCanvas = document.createElement("canvas"); offscreenCanvas.width = canvas.width * 4; offscreenCanvas.height = canvas.height * 4//new OffscreenCanvas(canvas.width * 4, canvas.height * 4);
-        this.cache = {
-            canvas: offscreenCanvas,
-            ctx: offscreenCanvas.getContext("2d")
-        };
-        // }
+        if (caching) {
+            const cacheCanvas = document.createElement("canvas");
+            this.cache = {
+                canvas: cacheCanvas,
+                ctx: cacheCanvas.getContext("2d")
+            };
+            this.resize(canvas.width, canvas.height);
+        }
         this.reset();
     }
 
@@ -19,8 +21,9 @@ class Graphics {
         this.figures = {};
         this.zIndexLayers = [];
         this.camera = {};
-        if (this.caching) this.cache.camera = {};
+        if (this.#caching) this.cache.camera = {};
         this.setCamera(0, 0, 1);
+        if (this.#caching) this.#setCache();
         this.nextId = 0;
         this.frame = 0;
     }
@@ -28,8 +31,20 @@ class Graphics {
     resize(width, height) {
         this.canvas.width = width ?? this.canvas.width;
         this.canvas.height = height ?? this.canvas.height;
-        this.cache.canvas.width = (width ?? this.canvas.width) * 4;
-        this.cache.canvas.height = (height ?? this.canvas.height) * 4;
+        this.cache.canvas.width = this.canvas.width * 4;
+        this.cache.canvas.height = this.canvas.height * 4;
+    }
+
+    #setCache() {
+        const { camera, cache } = this;
+        cache.width = cache.canvas.width / camera.zoom;
+        cache.height = cache.canvas.height / camera.zoom;
+        cache.bounds = {
+            xL: camera.x - cache.width / 2,
+            xU: camera.x + cache.width / 2,
+            yL: camera.y - cache.height / 2,
+            yU: camera.y + cache.height / 2,
+        };
     }
 
     #setCamera(canvas, camera, x, y, zoom) {
@@ -38,16 +53,18 @@ class Graphics {
         camera.zoom = zoom ?? camera.zoom;
         camera.bounds = {
             xL: camera.x - canvas.width / camera.zoom / 2,
-            xR: camera.x + canvas.width / camera.zoom / 2,
+            xU: camera.x + canvas.width / camera.zoom / 2,
             yL: camera.y - canvas.height / camera.zoom / 2,
-            yR: camera.y + canvas.height / camera.zoom / 2,
+            yU: camera.y + canvas.height / camera.zoom / 2,
         };
     }
 
     setCamera(x, y, zoom) {
-        if (!this.stateChanged && (x !== this.camera.x || y !== this.camera.y || zoom !== this.camera.zoom)) this.stateChanged = "camera";
+        if (!this.stateChanged
+            && (x !== this.camera.x || y !== this.camera.y || zoom !== this.camera.zoom)
+        ) this.stateChanged = "camera";
         this.#setCamera(this.canvas, this.camera, x, y, zoom);
-        if (this.caching) {
+        if (this.#caching) {
             this.#setCamera(this.cache.canvas, this.cache.camera, x, y, zoom);
         }
     }
@@ -55,7 +72,9 @@ class Graphics {
     #add(data) {
         this.stateChanged = "figure";
         this.figures[this.nextId] = data;
-        data.zIndex = data.zIndex > Graphics.MAX_Z_INDEX ? Graphics.MAX_Z_INDEX : data.zIndex;//min
+        data.zIndex = data.zIndex > Graphics.MAX_Z_INDEX ?
+            Graphics.MAX_Z_INDEX : data.zIndex < 0 ?
+                0 : data.zIndex;
         if (this.zIndexLayers[data.zIndex]) {
             this.zIndexLayers[data.zIndex].push(this.nextId);
         } else {
@@ -129,22 +148,23 @@ class Graphics {
 
         let maxBatchTime = 5, layerIdx = 0, idIdx = 0;
 
-        function updateBatch(figures, zIndexLayers, graphics, frame) {
-            if (layerIdx >= zIndexLayers.length || frame !== graphics.frame) {
+        function updateBatch(graphics, frame) {
+            console.log(this)//move this func out so it can access this then pass ctx and maybe timeout time
+            if (layerIdx >= graphics.zIndexLayers.length || frame !== graphics.frame) {
                 if (callback) callback();
                 return;
             }
 
             let start = Date.now();
-            while (layerIdx < zIndexLayers.length && Date.now() - start < maxBatchTime) {
-                if (zIndexLayers[layerIdx] === undefined) {
+            while (layerIdx < graphics.zIndexLayers.length && Date.now() - start < maxBatchTime) {
+                if (graphics.zIndexLayers[layerIdx] === undefined) {
                     layerIdx++;
                     continue;
                 }
 
-                const figure = figures[zIndexLayers[layerIdx][idIdx]];
-                // if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xR
-                //     || figure.y < camera.bounds.yL || figure.y > camera.bounds.yR) continue;
+                const figure = graphics.figures[graphics.zIndexLayers[layerIdx][idIdx]];
+                // if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xU
+                //     || figure.y < camera.bounds.yL || figure.y > camera.bounds.yU) continue;
                 ctx.fillStyle = figure.color;
                 ctx.strokeStyle = figure.borderColor ?? figure.color;
 
@@ -189,49 +209,43 @@ class Graphics {
                 }
 
                 idIdx++;
-                if (idIdx >= zIndexLayers[layerIdx].length) {
+                if (idIdx >= graphics.zIndexLayers[layerIdx].length) {
                     idIdx = 0;
                     layerIdx++;
                 }
             }
 
             setTimeout(() => {
-                updateBatch(figures, zIndexLayers, graphics, frame);
+                updateBatch(graphics, frame);
             }, 0);
         }
 
-        updateBatch(this.figures, this.zIndexLayers, graphics, graphics.frame);
+        updateBatch(this, this.frame);
     }
 
     update() {
         if (!this.stateChanged && !this.cache.working) return;
 
-        if (this.caching) {
-            const { canvas, ctx, camera } = this;
+        if (this.#caching) {
+            const { canvas, ctx, camera, cache } = this;
             ctx.restore();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
             ctx.translate(-camera.x * camera.zoom + canvas.width / 2, -camera.y * camera.zoom + canvas.height / 2);
             ctx.scale(camera.zoom, camera.zoom);
-            if (!this.cache.working && (!this.cache.bitmap || this.stateChanged === "figure"
-                || camera.bounds.xL < this.cache.bounds.xL || camera.bounds.xR > this.cache.bounds.xR
-                || camera.bounds.yL < this.cache.bounds.yL || camera.bounds.yR > this.cache.bounds.yR
-                || this.cache.data.width / Math.abs(camera.bounds.xR - camera.bounds.xL) > 8)) {
-                this.cache.working = true;
-                this.#update(this.cache, () => {
-                    // if (this.cache.bitmap) this.cache.bitmap.close();
-                    this.cache.bitmap = this.cache.canvas;//.transferToImageBitmap();
-                    this.cache.working = false;
+            if (!cache.working
+                && (this.stateChanged === "figure"
+                    || camera.bounds.xL < cache.bounds.xL || camera.bounds.xU > cache.bounds.xU
+                    || camera.bounds.yL < cache.bounds.yL || camera.bounds.yU > cache.bounds.yU
+                    || cache.width / Math.abs(camera.bounds.xU - camera.bounds.xL) > 8)
+            ) {
+                cache.working = true;
+                this.#update(cache, () => {
+                    cache.working = false;
                 });
-                this.cache.data = { x: camera.x, y: camera.y, width: this.cache.canvas.width / camera.zoom, height: this.cache.canvas.height / camera.zoom };
-                this.cache.bounds = {
-                    xL: this.cache.data.x - this.cache.data.width / 2,
-                    xR: this.cache.data.x + this.cache.data.width / 2,
-                    yL: this.cache.data.y - this.cache.data.height / 2,
-                    yR: this.cache.data.y + this.cache.data.height / 2,
-                };
+                this.#setCache();
             }
-            if (this.cache.bitmap) this.ctx.drawImage(this.cache.bitmap, this.cache.bounds.xL, this.cache.bounds.yL, this.cache.data.width, this.cache.data.height);
+            ctx.drawImage(cache.canvas, cache.bounds.xL, cache.bounds.yL, cache.width, cache.height);
         } else {
             this.#update(this);
         }
