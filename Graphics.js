@@ -23,7 +23,7 @@ class Graphics {
         this.camera = {};
         if (this.#caching) this.cache.camera = {};
         this.setCamera(0, 0, 1);
-        if (this.#caching) this.#setCache();
+        if (this.#caching) this.#updateCacheData();
         this.nextId = 0;
         this.frame = 0;
     }
@@ -35,7 +35,7 @@ class Graphics {
         this.cache.canvas.height = this.canvas.height * 4;
     }
 
-    #setCache() {
+    #updateCacheData() {
         const { camera, cache } = this;
         cache.width = cache.canvas.width / camera.zoom;
         cache.height = cache.canvas.height / camera.zoom;
@@ -60,9 +60,9 @@ class Graphics {
     }
 
     setCamera(x, y, zoom) {
-        if (!this.stateChanged
-            && (x !== this.camera.x || y !== this.camera.y || zoom !== this.camera.zoom)
-        ) this.stateChanged = "camera";
+        if (!this.stateChanged && (x !== this.camera.x || y !== this.camera.y || zoom !== this.camera.zoom)) {
+            this.stateChanged = "camera";
+        }
         this.#setCamera(this.canvas, this.camera, x, y, zoom);
         if (this.#caching) {
             this.#setCamera(this.cache.canvas, this.cache.camera, x, y, zoom);
@@ -123,131 +123,122 @@ class Graphics {
         return this.#add({ type: "line", x1, y1, x2, y2, width, color, zIndex });
     }
 
-    addText(x, y, text, font = "16px sans-serif", maxWidth, color = "black", zIndex = 0) {
+    addText(x, y, text, font = "16px sans-serif", maxWidth, color = "black", zIndex = 0, xAlign = "center", yAlign = "top") {
         this.ctx.font = font;
         const metrics = this.ctx.measureText(text);
         return this.#add({
-            type: "text", x, y, font, color, zIndex,
+            type: "text", x, y, font, color, zIndex, xAlign, yAlign,
             textRows: this.#getTextRows(text, maxWidth),
             height: metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
         });
     }
 
-    //remove all math to boost performance on frequent updates
-    #update(graphics, callback) {
-        this.frame++;
+    #resetCanvas(graphics) {
         const { canvas, ctx, camera } = graphics;
         ctx.restore();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.save();
         ctx.translate(-camera.x * camera.zoom + canvas.width / 2, -camera.y * camera.zoom + canvas.height / 2);
         ctx.scale(camera.zoom, camera.zoom);
-        //for now
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
+    }
 
-        let maxBatchTime = 5, layerIdx = 0, idIdx = 0;
-
-        function updateBatch(graphics, frame) {
-            console.log(this)//move this func out so it can access this then pass ctx and maybe timeout time
-            if (layerIdx >= graphics.zIndexLayers.length || frame !== graphics.frame) {
-                if (callback) callback();
-                return;
-            }
-
-            let start = Date.now();
-            while (layerIdx < graphics.zIndexLayers.length && Date.now() - start < maxBatchTime) {
-                if (graphics.zIndexLayers[layerIdx] === undefined) {
-                    layerIdx++;
-                    continue;
-                }
-
-                const figure = graphics.figures[graphics.zIndexLayers[layerIdx][idIdx]];
-                // if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xU
-                //     || figure.y < camera.bounds.yL || figure.y > camera.bounds.yU) continue;
-                ctx.fillStyle = figure.color;
-                ctx.strokeStyle = figure.borderColor ?? figure.color;
-
-                if (figure.type === "rect") {
-                    ctx.fillRect(figure.x - figure.width / 2, figure.y - figure.height / 2, figure.width, figure.height);
-
-                    if (figure.borderWidth > 0) {
-                        const bw = figure.borderWidth;
-                        const halfBW = bw / 2;
-                        ctx.lineWidth = figure.borderWidth;
-                        ctx.strokeRect(
-                            figure.x + halfBW - figure.width / 2,
-                            figure.y + halfBW - figure.height / 2,
-                            figure.width - bw,
-                            figure.height - bw
-                        );
-                    }
-                } else if (figure.type === "circle") {
-                    ctx.beginPath();
-                    ctx.arc(figure.x, figure.y, figure.radius, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    if (figure.borderWidth > 0) {
-                        ctx.lineWidth = figure.borderWidth;
-                        ctx.beginPath();
-                        ctx.arc(figure.x, figure.y, figure.radius - figure.borderWidth / 2, 0, Math.PI * 2);
-                        ctx.stroke();
-                    }
-                } else if (figure.type === "line") {
-                    ctx.lineWidth = figure.width;
-                    ctx.beginPath();
-                    ctx.moveTo(figure.x1, figure.y1);
-                    ctx.lineTo(figure.x2, figure.y2);
-                    ctx.stroke();
-                } else if (figure.type === "text") {
-                    ctx.font = figure.font;
-                    let y = figure.y;
-                    for (const row of figure.textRows) {
-                        ctx.fillText(row, figure.x, y);
-                        y += figure.height;
-                    }
-                }
-
-                idIdx++;
-                if (idIdx >= graphics.zIndexLayers[layerIdx].length) {
-                    idIdx = 0;
-                    layerIdx++;
-                }
-            }
-
-            setTimeout(() => {
-                updateBatch(graphics, frame);
-            }, 0);
+    //remove all math to boost performance on frequent updates
+    #batchUpdate(ctx, frame, maxBatchTime, callback, layerIdx = 0, idIdx = 0) {
+        if (layerIdx >= this.zIndexLayers.length || frame !== this.frame) {
+            if (callback) callback();
+            return;
         }
 
-        updateBatch(this, this.frame);
+        let start = Date.now();
+        while (layerIdx < this.zIndexLayers.length && Date.now() - start < maxBatchTime) {
+            if (this.zIndexLayers[layerIdx] === undefined) {
+                layerIdx++;
+                continue;
+            }
+
+            const figure = this.figures[this.zIndexLayers[layerIdx][idIdx]];
+            // if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xU
+            //     || figure.y < camera.bounds.yL || figure.y > camera.bounds.yU) continue;
+            ctx.fillStyle = figure.color;
+            ctx.strokeStyle = figure.borderColor ?? figure.color;
+
+            if (figure.type === "rect") {
+                ctx.fillRect(figure.x - figure.width / 2, figure.y - figure.height / 2, figure.width, figure.height);
+
+                if (figure.borderWidth > 0) {
+                    const bw = figure.borderWidth;
+                    const halfBW = bw / 2;
+                    ctx.lineWidth = figure.borderWidth;
+                    ctx.strokeRect(
+                        figure.x + halfBW - figure.width / 2,
+                        figure.y + halfBW - figure.height / 2,
+                        figure.width - bw,
+                        figure.height - bw
+                    );
+                }
+            } else if (figure.type === "circle") {
+                ctx.beginPath();
+                ctx.arc(figure.x, figure.y, figure.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (figure.borderWidth > 0) {
+                    ctx.lineWidth = figure.borderWidth;
+                    ctx.beginPath();
+                    ctx.arc(figure.x, figure.y, figure.radius - figure.borderWidth / 2, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            } else if (figure.type === "line") {
+                ctx.lineWidth = figure.width;
+                ctx.beginPath();
+                ctx.moveTo(figure.x1, figure.y1);
+                ctx.lineTo(figure.x2, figure.y2);
+                ctx.stroke();
+            } else if (figure.type === "text") {
+                ctx.font = figure.font;
+                ctx.textAlign = figure.xAlign;
+                ctx.textBaseline = figure.yAlign;
+                let y = figure.y;
+                for (const row of figure.textRows) {
+                    ctx.fillText(row, figure.x, y);
+                    y += figure.height;
+                }
+            }
+
+            idIdx++;
+            if (idIdx >= this.zIndexLayers[layerIdx].length) {
+                idIdx = 0;
+                layerIdx++;
+            }
+        }
+
+        setTimeout(() => {
+            this.#batchUpdate(ctx, frame, maxBatchTime, callback, layerIdx, idIdx);
+        }, 0);
     }
 
     update() {
-        if (!this.stateChanged && !this.cache.working) return;
+        if (!(this.stateChanged || this.#caching && this.cache.updating)) return;
+        this.#resetCanvas(this);
 
         if (this.#caching) {
-            const { canvas, ctx, camera, cache } = this;
-            ctx.restore();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.translate(-camera.x * camera.zoom + canvas.width / 2, -camera.y * camera.zoom + canvas.height / 2);
-            ctx.scale(camera.zoom, camera.zoom);
-            if (!cache.working
-                && (this.stateChanged === "figure"
-                    || camera.bounds.xL < cache.bounds.xL || camera.bounds.xU > cache.bounds.xU
-                    || camera.bounds.yL < cache.bounds.yL || camera.bounds.yU > cache.bounds.yU
-                    || cache.width / Math.abs(camera.bounds.xU - camera.bounds.xL) > 8)
-            ) {
-                cache.working = true;
-                this.#update(cache, () => {
-                    cache.working = false;
+            const { ctx, camera, cache } = this;
+            const outOfBounds = camera.bounds.xL < cache.bounds.xL || camera.bounds.xU > cache.bounds.xU ||
+                camera.bounds.yL < cache.bounds.yL || camera.bounds.yU > cache.bounds.yU;
+            const zoomTooHigh = cache.width / Math.abs(camera.bounds.xU - camera.bounds.xL) > 8;
+
+            if (!cache.updating && (this.stateChanged === "figure" || outOfBounds || zoomTooHigh)) {
+                cache.updating = true;
+                this.#resetCanvas(cache);
+                this.#batchUpdate(cache.ctx, ++this.frame, 5, () => {
+                    cache.updating = false;
+                    this.stateChanged = "cache";
                 });
-                this.#setCache();
+                this.#updateCacheData();
             }
+
             ctx.drawImage(cache.canvas, cache.bounds.xL, cache.bounds.yL, cache.width, cache.height);
         } else {
-            this.#update(this);
+            this.#batchUpdate(this.ctx, ++this.frame, 5);
         }
 
         delete this.stateChanged;
