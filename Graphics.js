@@ -7,11 +7,8 @@ class Graphics {
         this.#caching = caching;
         this.ctx = canvas.getContext("2d");
         if (caching) {
-            const cacheCanvas = document.createElement("canvas");
-            this.cache = {
-                canvas: cacheCanvas,
-                ctx: cacheCanvas.getContext("2d")
-            };
+            this.cache = { canvas: document.createElement("canvas") };
+            this.cache.ctx = this.cache.canvas.getContext("2d");
             this.resize(canvas.width, canvas.height);
         }
         this.reset();
@@ -94,20 +91,25 @@ class Graphics {
     }
 
     #getTextRows(text, maxWidth) {
-        const words = text.split(" ");
         const rows = [];
-        let newRow = words[0];
 
-        for (let i = 1; i < words.length; i++) {
-            if (this.ctx.measureText(newRow + " " + words[i]).width < maxWidth) {
-                newRow += " " + words[i];
-            } else {
-                rows.push(newRow);
-                newRow = words[i];
+        for (const sentence of text.split("\n")) {
+            const words = sentence.split(" ");
+            let newRow = words[0];
+
+            for (let i = 1; i < words.length; i++) {
+                const testRow = newRow + " " + words[i];
+                if (this.ctx.measureText(testRow).width < maxWidth) {
+                    newRow = testRow;
+                } else {
+                    rows.push(newRow);
+                    newRow = words[i];
+                }
             }
+
+            rows.push(newRow);
         }
 
-        rows.push(newRow);
         return rows;
     }
 
@@ -123,13 +125,14 @@ class Graphics {
         return this.#add({ type: "line", x1, y1, x2, y2, width, color, zIndex });
     }
 
-    addText(x, y, text, font = "16px sans-serif", maxWidth, color = "black", zIndex = 0, xAlign = "center", yAlign = "top") {
+    addText(x, y, text, font = "16px sans-serif", maxWidth = Infinity, color = "black", zIndex = 0, linePad, textAlign = "center") {
         this.ctx.font = font;
         const metrics = this.ctx.measureText(text);
+        const height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
         return this.#add({
-            type: "text", x, y, font, color, zIndex, xAlign, yAlign,
+            type: "text", x, y, font, color, zIndex, textAlign,
             textRows: this.#getTextRows(text, maxWidth),
-            height: metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+            height: height + (linePad ?? height * 0.2)
         });
     }
 
@@ -140,6 +143,7 @@ class Graphics {
         ctx.save();
         ctx.translate(-camera.x * camera.zoom + canvas.width / 2, -camera.y * camera.zoom + canvas.height / 2);
         ctx.scale(camera.zoom, camera.zoom);
+        ctx.textBaseline = "top";
     }
 
     //remove all math to boost performance on frequent updates
@@ -195,8 +199,7 @@ class Graphics {
                 ctx.stroke();
             } else if (figure.type === "text") {
                 ctx.font = figure.font;
-                ctx.textAlign = figure.xAlign;
-                ctx.textBaseline = figure.yAlign;
+                ctx.textAlign = figure.textAlign;
                 let y = figure.y;
                 for (const row of figure.textRows) {
                     ctx.fillText(row, figure.x, y);
