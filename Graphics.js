@@ -114,25 +114,41 @@ class Graphics {
     }
 
     addRectangle(x, y, width, height, borderWidth = 0, color = "black", borderColor = "black", zIndex = 0) {
-        return this.#add({ type: "rect", x, y, width, height, borderWidth, color, borderColor, zIndex });
+        return this.#add({
+            type: "rect", x, y, width, height, borderWidth, color, borderColor, zIndex,
+            bounds: { xL: x - width / 2, xU: x + width / 2, yL: y - height / 2, yU: y + height / 2 }
+        });
     }
 
     addCircle(x, y, radius, borderWidth = 0, color = "black", borderColor = "black", zIndex = 0) {
-        return this.#add({ type: "circle", x, y, radius, borderWidth, color, borderColor, zIndex });
+        return this.#add({
+            type: "circle", x, y, radius, borderWidth, color, borderColor, zIndex,
+            bounds: { xL: x - radius, xU: x + radius, yL: y - radius, yU: y + radius }
+        });
     }
 
     addLine(x1, y1, x2, y2, width, color = "black", zIndex = 0) {
-        return this.#add({ type: "line", x1, y1, x2, y2, width, color, zIndex });
+        return this.#add({
+            type: "line", x1, y1, x2, y2, width, color, zIndex,
+            bounds: {
+                xL: Math.min(x1, x2) - width / 2,
+                xU: Math.max(x1, x2) + width / 2,
+                yL: Math.min(y1, y2) - width / 2,
+                yU: Math.max(y1, y2) + width / 2
+            }
+        });
     }
 
     addText(x, y, text, font = "16px sans-serif", maxWidth = Infinity, color = "black", zIndex = 0, linePad, textAlign = "center") {
         this.ctx.font = font;
         const metrics = this.ctx.measureText(text);
         const height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+        linePad = linePad ?? height * 0.2;
         return this.#add({
             type: "text", x, y, font, color, zIndex, textAlign,
             textRows: this.#getTextRows(text, maxWidth),
-            height: height + (linePad ?? height * 0.2)
+            height: height + linePad,
+            bounds: { xL: x, xU: x, yL: y, yU: y }//just gotta fix this now
         });
     }
 
@@ -147,7 +163,7 @@ class Graphics {
     }
 
     //remove all math to boost performance on frequent updates
-    #batchUpdate(ctx, frame, maxBatchTime, callback, layerIdx = 0, idIdx = 0) {
+    #batchUpdate(ctx, camera, frame, maxBatchTime, callback, layerIdx = 0, idIdx = 0) {
         if (layerIdx >= this.zIndexLayers.length || frame !== this.frame) {
             if (callback) callback();
             return;
@@ -161,49 +177,50 @@ class Graphics {
             }
 
             const figure = this.figures[this.zIndexLayers[layerIdx][idIdx]];
-            // if (figure.x < camera.bounds.xL || figure.x > camera.bounds.xU
-            //     || figure.y < camera.bounds.yL || figure.y > camera.bounds.yU) continue;
-            ctx.fillStyle = figure.color;
-            ctx.strokeStyle = figure.borderColor ?? figure.color;
+            if (figure.bounds.xL <= camera.bounds.xU && figure.bounds.xU >= camera.bounds.xL &&
+                figure.bounds.yL <= camera.bounds.yU && figure.bounds.yU >= camera.bounds.yL) {
+                ctx.fillStyle = figure.color;
+                ctx.strokeStyle = figure.borderColor ?? figure.color;
 
-            if (figure.type === "rect") {
-                ctx.fillRect(figure.x - figure.width / 2, figure.y - figure.height / 2, figure.width, figure.height);
+                if (figure.type === "rect") {
+                    ctx.fillRect(figure.x - figure.width / 2, figure.y - figure.height / 2, figure.width, figure.height);
 
-                if (figure.borderWidth > 0) {
-                    const bw = figure.borderWidth;
-                    const halfBW = bw / 2;
-                    ctx.lineWidth = figure.borderWidth;
-                    ctx.strokeRect(
-                        figure.x + halfBW - figure.width / 2,
-                        figure.y + halfBW - figure.height / 2,
-                        figure.width - bw,
-                        figure.height - bw
-                    );
-                }
-            } else if (figure.type === "circle") {
-                ctx.beginPath();
-                ctx.arc(figure.x, figure.y, figure.radius, 0, Math.PI * 2);
-                ctx.fill();
-
-                if (figure.borderWidth > 0) {
-                    ctx.lineWidth = figure.borderWidth;
+                    if (figure.borderWidth > 0) {
+                        const bw = figure.borderWidth;
+                        const halfBW = bw / 2;
+                        ctx.lineWidth = figure.borderWidth;
+                        ctx.strokeRect(
+                            figure.x + halfBW - figure.width / 2,
+                            figure.y + halfBW - figure.height / 2,
+                            figure.width - bw,
+                            figure.height - bw
+                        );
+                    }
+                } else if (figure.type === "circle") {
                     ctx.beginPath();
-                    ctx.arc(figure.x, figure.y, figure.radius - figure.borderWidth / 2, 0, Math.PI * 2);
+                    ctx.arc(figure.x, figure.y, figure.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    if (figure.borderWidth > 0) {
+                        ctx.lineWidth = figure.borderWidth;
+                        ctx.beginPath();
+                        ctx.arc(figure.x, figure.y, figure.radius - figure.borderWidth / 2, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                } else if (figure.type === "line") {
+                    ctx.lineWidth = figure.width;
+                    ctx.beginPath();
+                    ctx.moveTo(figure.x1, figure.y1);
+                    ctx.lineTo(figure.x2, figure.y2);
                     ctx.stroke();
-                }
-            } else if (figure.type === "line") {
-                ctx.lineWidth = figure.width;
-                ctx.beginPath();
-                ctx.moveTo(figure.x1, figure.y1);
-                ctx.lineTo(figure.x2, figure.y2);
-                ctx.stroke();
-            } else if (figure.type === "text") {
-                ctx.font = figure.font;
-                ctx.textAlign = figure.textAlign;
-                let y = figure.y;
-                for (const row of figure.textRows) {
-                    ctx.fillText(row, figure.x, y);
-                    y += figure.height;
+                } else if (figure.type === "text") {
+                    ctx.font = figure.font;
+                    ctx.textAlign = figure.textAlign;
+                    let y = figure.y;
+                    for (const row of figure.textRows) {
+                        ctx.fillText(row, figure.x, y);
+                        y += figure.height;
+                    }
                 }
             }
 
@@ -215,7 +232,7 @@ class Graphics {
         }
 
         setTimeout(() => {
-            this.#batchUpdate(ctx, frame, maxBatchTime, callback, layerIdx, idIdx);
+            this.#batchUpdate(ctx, camera, frame, maxBatchTime, callback, layerIdx, idIdx);
         }, 0);
     }
 
@@ -232,7 +249,7 @@ class Graphics {
             if (!cache.updating && (this.stateChanged === "figure" || outOfBounds || zoomTooHigh)) {
                 cache.updating = true;
                 this.#resetCanvas(cache);
-                this.#batchUpdate(cache.ctx, ++this.frame, 5, () => {
+                this.#batchUpdate(cache.ctx, cache.camera, ++this.frame, 5, () => {
                     cache.updating = false;
                     this.stateChanged = "cache";
                 });
@@ -241,7 +258,7 @@ class Graphics {
 
             ctx.drawImage(cache.canvas, cache.bounds.xL, cache.bounds.yL, cache.width, cache.height);
         } else {
-            this.#batchUpdate(this.ctx, ++this.frame, 5);
+            this.#batchUpdate(this.ctx, this.camera, ++this.frame, 5);
         }
 
         delete this.stateChanged;
