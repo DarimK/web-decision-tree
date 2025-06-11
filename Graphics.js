@@ -80,7 +80,8 @@ class Graphics {
         return this.nextId++;
     }
 
-    remove(id) {
+    #remove(id) {
+        if (!this.figures[id]) return;
         this.stateChanged = "figure";
         const zIndex = this.figures[id].zIndex;
         this.zIndexLayers[zIndex].splice(this.zIndexLayers[zIndex].indexOf(id), 1);
@@ -90,24 +91,37 @@ class Graphics {
         delete this.figures[id];
     }
 
+    remove(id) {
+        if (this.figures[id] && this.figures[id].ids) {
+            for (const subId of this.figures[id].ids) {
+                this.#remove(subId);
+            }
+        }
+        this.#remove(id);
+    }
+
     #getTextRows(text, maxWidth) {
         const rows = [];
 
         for (const sentence of text.split("\n")) {
             const words = sentence.split(" ");
-            let newRow = words[0];
+            let newText = words[0];
+            let newMetrics = this.ctx.measureText(newText);
 
             for (let i = 1; i < words.length; i++) {
-                const testRow = newRow + " " + words[i];
-                if (this.ctx.measureText(testRow).width < maxWidth) {
-                    newRow = testRow;
+                const testText = newText + " " + words[i];
+                const testMetrics = this.ctx.measureText(testText);
+                if (testMetrics.width < maxWidth) {
+                    newText = testText;
+                    newMetrics = testMetrics;
                 } else {
-                    rows.push(newRow);
-                    newRow = words[i];
+                    rows.push({ text: newText, metrics: newMetrics });
+                    newText = words[i];
+                    newMetrics = this.ctx.measureText(newText);
                 }
             }
 
-            rows.push(newRow);
+            rows.push({ text: newText, metrics: newMetrics });
         }
 
         return rows;
@@ -141,15 +155,23 @@ class Graphics {
 
     addText(x, y, text, font = "16px sans-serif", maxWidth = Infinity, color = "black", zIndex = 0, linePad, textAlign = "center") {
         this.ctx.font = font;
-        const metrics = this.ctx.measureText(text);
-        const height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
-        linePad = linePad ?? height * 0.2;
-        return this.#add({
-            type: "text", x, y, font, color, zIndex, textAlign,
-            textRows: this.#getTextRows(text, maxWidth),
-            height: height + linePad,
-            bounds: { xL: x, xU: x, yL: y, yU: y }//just gotta fix this now
-        });
+        this.ctx.textAlign = textAlign;
+        const ids = [];
+        let yOffset = y;
+
+        for (const row of this.#getTextRows(text, maxWidth)) {
+            ids.push(this.#add({
+                type: "textRow", x, font, color, zIndex, textAlign,
+                y: yOffset,
+                text: row.text,
+                bounds: { xL: -Infinity, xU: Infinity, yL: -Infinity, yU: Infinity }//just gotta fix this now
+            }));
+
+            const height = row.metrics.actualBoundingBoxAscent + row.metrics.actualBoundingBoxDescent;
+            yOffset += height + (linePad ?? height * 0.2);
+        }
+
+        return this.#add({ type: "text", ids });
     }
 
     #resetCanvas(graphics) {
@@ -177,8 +199,11 @@ class Graphics {
             }
 
             const figure = this.figures[this.zIndexLayers[layerIdx][idIdx]];
-            if (figure.bounds.xL <= camera.bounds.xU && figure.bounds.xU >= camera.bounds.xL &&
-                figure.bounds.yL <= camera.bounds.yU && figure.bounds.yU >= camera.bounds.yL) {
+            if (figure.bounds &&
+                figure.bounds.xL <= camera.bounds.xU && figure.bounds.xU >= camera.bounds.xL &&
+                figure.bounds.yL <= camera.bounds.yU && figure.bounds.yU >= camera.bounds.yL &&
+                (figure.bounds.xU - figure.bounds.xL) / (camera.bounds.xU - camera.bounds.xL) > 1e-5 &&
+                (figure.bounds.yU - figure.bounds.yL) / (camera.bounds.yU - camera.bounds.yL) > 1e-5) {
                 ctx.fillStyle = figure.color;
                 ctx.strokeStyle = figure.borderColor ?? figure.color;
 
@@ -213,14 +238,10 @@ class Graphics {
                     ctx.moveTo(figure.x1, figure.y1);
                     ctx.lineTo(figure.x2, figure.y2);
                     ctx.stroke();
-                } else if (figure.type === "text") {
+                } else if (figure.type === "textRow") {
                     ctx.font = figure.font;
                     ctx.textAlign = figure.textAlign;
-                    let y = figure.y;
-                    for (const row of figure.textRows) {
-                        ctx.fillText(row, figure.x, y);
-                        y += figure.height;
-                    }
+                    ctx.fillText(figure.text, figure.x, figure.y);
                 }
             }
 
