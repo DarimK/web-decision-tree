@@ -153,25 +153,38 @@ class Graphics {
         });
     }
 
-    addText(x, y, text, font = "16px sans-serif", maxWidth = Infinity, color = "black", zIndex = 0, linePad, textAlign = "center") {
+    addText(x, y, text, font = "16px sans-serif", maxWidth = Infinity, color = "black", zIndex = 0, lineHeight = 1, textAlign = "center") {
         this.ctx.font = font;
         this.ctx.textAlign = textAlign;
+        const metrics = this.ctx.measureText("");
+        const height = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
+        const rows = this.#getTextRows(text, maxWidth);
         const ids = [];
-        let yOffset = y;
+        let rowY = y;
 
-        for (const row of this.#getTextRows(text, maxWidth)) {
+        for (const row of rows) {
             ids.push(this.#add({
                 type: "textRow", x, font, color, zIndex, textAlign,
-                y: yOffset,
+                y: rowY,
                 text: row.text,
-                bounds: { xL: -Infinity, xU: Infinity, yL: -Infinity, yU: Infinity }//just gotta fix this now
+                bounds: {
+                    xL: x - row.metrics.actualBoundingBoxLeft,
+                    xU: x + row.metrics.actualBoundingBoxRight,
+                    yL: rowY,
+                    yU: rowY + height
+                }
             }));
 
-            const height = row.metrics.actualBoundingBoxAscent + row.metrics.actualBoundingBoxDescent;
-            yOffset += height + (linePad ?? height * 0.2);
+            rowY += height * lineHeight;
         }
 
-        return this.#add({ type: "text", ids });
+        const lastRowHeight = rows[rows.length - 1].metrics.actualBoundingBoxDescent -
+            rows[rows.length - 1].metrics.actualBoundingBoxAscent;
+        return this.#add({
+            type: "text", ids, x, y, zIndex,
+            width: maxWidth,
+            height: rowY - y - height * lineHeight + lastRowHeight
+        });
     }
 
     #resetCanvas(graphics) {
@@ -184,7 +197,7 @@ class Graphics {
         ctx.textBaseline = "top";
     }
 
-    //remove all math to boost performance on frequent updates
+    //remove all math to boost performance on frequent updates (maybe later)
     #batchUpdate(ctx, camera, frame, maxBatchTime, callback, layerIdx = 0, idIdx = 0) {
         if (layerIdx >= this.zIndexLayers.length || frame !== this.frame) {
             if (callback) callback();
