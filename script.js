@@ -31,3 +31,152 @@ document.getElementById("classify").addEventListener("click", () => {
     const classification = tree.evaluate(instance);
     document.getElementById("classification").textContent = `Classification: ${classification}`;
 });
+
+
+//testing
+let isDragging = false;
+let lastMouseX = 0, lastMouseY = 0;
+let cameraX = 0, cameraY = 0;
+let zoom = 1;
+const canvas = document.createElement("canvas");
+canvas.width = 1000;
+canvas.height = 600;
+document.body.appendChild(canvas);
+const graphics = new Graphics(canvas);
+let lastMs = 0;
+
+function animate() {
+    graphics.setCamera(cameraX, cameraY, zoom);
+    let start = Date.now();
+    graphics.update();
+    end = Date.now();
+    if (Math.abs(end - start - lastMs) > 1) {
+        lastMs = end - start;
+        console.log(lastMs);
+    }
+    requestAnimationFrame(animate);
+}
+
+canvas.addEventListener("mousedown", (event) => {
+    isDragging = true;
+    lastMouseX = event.clientX;
+    lastMouseY = event.clientY;
+});
+canvas.addEventListener("mouseup", () => {
+    isDragging = false;
+});
+canvas.addEventListener("mousemove", (event) => {
+    if (isDragging) {
+        const dx = event.clientX - lastMouseX;
+        const dy = event.clientY - lastMouseY;
+        cameraX -= dx / zoom;
+        cameraY -= dy / zoom;
+        lastMouseX = event.clientX;
+        lastMouseY = event.clientY;
+    }
+});
+document.addEventListener("keypress", (e) => {
+    if (e.key === "1") zoom *= 0.98;
+    else if (e.key === "2") zoom *= 1.02;
+});
+canvas.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    zoom *= event.deltaY < 0 ? 1.1 : 0.9;
+});
+animate()
+
+
+//more testing
+let start = Date.now();
+let size = 1e8;
+let center = { x: 0, y: 0 };
+for (let i = 0; i < 23; i++) {
+    graphics.addCircle(
+        center.x,
+        center.y,
+        size + size / 10,
+        size / 10,
+        `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`
+    )
+    center.x += Math.random() * size / Math.sqrt(2) - size / Math.sqrt(2) / 2;
+    center.y += Math.random() * size / Math.sqrt(2) - size / Math.sqrt(2) / 2
+    size /= 2;
+}
+console.log(Date.now() - start);
+
+const radius = 5000;
+function randomXY() {
+    let angle = Math.random() * 2 * Math.PI;
+    let distance = Math.sqrt(Math.random()) * radius;
+    let x = Math.cos(angle) * distance;
+    let y = Math.sin(angle) * distance;
+    return { x: x, y: y };
+}
+
+start = Date.now();
+for (i = 0; i < 3250; i++) {
+    let sizeX = Math.random() * 90 + 10;
+    let sizeY = Math.random() * 90 + 10;
+    let xy = randomXY();
+    graphics.addRectangle(
+        xy.x,
+        xy.y,
+        sizeX,
+        sizeY,
+        5,
+        `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`,
+        undefined,
+        99 - Math.floor(Math.min(sizeX, sizeY))
+    )
+}
+console.log(Date.now() - start);
+
+start = Date.now();
+for (i = 0; i < 3250; i++) {
+    let size = Math.random() * 95 + 5;
+    let xy = randomXY();
+    graphics.addCircle(
+        xy.x,
+        xy.y,
+        size,
+        5,
+        `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`,
+        undefined,
+        99 - Math.floor(size)
+    )
+}
+console.log(Date.now() - start);
+
+start = Date.now();
+for (i = 0; i < 3250; i++) {
+    let size = Math.random() * 200 + 50;
+    let xy = randomXY();
+    graphics.addText(
+        xy.x,
+        xy.y,
+        "h" + Array.from({ length: Math.floor(i / 100) + 1 }, () => "i").join(" "),
+        `700 ${Math.floor(Math.random() * 15) + 5}px sans-serif`,
+        size,
+        `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`,
+        99
+    )
+}
+console.log(Date.now() - start);
+
+const figCount = Object.keys(graphics.figures).length;
+start = Date.now();
+for (i = 0; i < 250; i++) {
+    let fig1 = graphics.figures[Math.floor(Math.random() * figCount)];
+    let fig2 = graphics.figures[Math.floor(Math.random() * figCount)];
+    let size = Math.random() * 10;
+    graphics.addLine(
+        fig1.x,
+        fig1.y,
+        fig2.x,
+        fig2.y,
+        size,
+        fig1.color,
+        Math.min(fig1.zIndex, fig2.zIndex) - 1
+    )
+}
+console.log(Date.now() - start);
