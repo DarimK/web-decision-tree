@@ -87,23 +87,20 @@ animate()
 
 let initialPinchDistance = 0;
 let initialZoom = 1;
-let pinchMidpoint = { x: 0, y: 0 };
-let initialCamera = { x: 0, y: 0 };
 canvas.addEventListener("touchstart", (event) => {
-    if (event.touches.length === 1) {
+    if (event.touches.length >= 1) {
         isDragging = true;
-        lastX = event.touches[0].clientX;
-        lastY = event.touches[0].clientY;
-    } else if (event.touches.length === 2) {
-        isDragging = false;
-        const xDistance = event.touches[0].clientX - event.touches[1].clientX;
-        const yDistance = event.touches[0].clientY - event.touches[1].clientY;
-        initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
-        initialZoom = zoom;
-        pinchMidpoint.x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-        pinchMidpoint.y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-        initialCamera.x = cameraX;
-        initialCamera.y = cameraY;
+        if (event.touches.length === 2) {
+            const xDistance = event.touches[0].clientX - event.touches[1].clientX;
+            const yDistance = event.touches[0].clientY - event.touches[1].clientY;
+            initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
+            initialZoom = zoom;
+            lastX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            lastY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        } else {
+            lastX = event.touches[0].clientX;
+            lastY = event.touches[0].clientY;
+        }
     }
     event.preventDefault();
 });
@@ -112,20 +109,25 @@ canvas.addEventListener("touchend", () => {
     initialPinchDistance = 0;
 });
 canvas.addEventListener("touchmove", (event) => {
-    if (isDragging && event.touches.length === 1) {
-        const dx = event.touches[0].clientX - lastX;
-        const dy = event.touches[0].clientY - lastY;
-        cameraX -= dx / zoom;
-        cameraY -= dy / zoom;
-        lastX = event.touches[0].clientX;
-        lastY = event.touches[0].clientY;
-    } else if (event.touches.length === 2) {
-        const xDistance = event.touches[0].clientX - event.touches[1].clientX;
-        const yDistance = event.touches[0].clientY - event.touches[1].clientY;
-        const distance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
-        zoom = initialZoom * (distance / initialPinchDistance);
-        cameraX = initialCamera.x - (pinchMidpoint.x - canvas.width / 2) * (1 / zoom - 1 / initialZoom);
-        cameraY = initialCamera.y - (pinchMidpoint.y - canvas.height / 2) * (1 / zoom - 1 / initialZoom);
+    if (event.touches.length >= 1) {
+        let currentX = event.touches[0].clientX;
+        let currentY = event.touches[0].clientY;
+        if (event.touches.length === 2) {
+            const xDistance = event.touches[0].clientX - event.touches[1].clientX;
+            const yDistance = event.touches[0].clientY - event.touches[1].clientY;
+            const distance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
+            zoom = initialZoom * (distance / initialPinchDistance);
+            currentX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        }
+        if (isDragging) {
+            const dx = currentX - lastX;
+            const dy = currentY - lastY;
+            cameraX -= dx / zoom;
+            cameraY -= dy / zoom;
+            lastX = currentX;
+            lastY = currentY;
+        }
     }
     event.preventDefault();
 });
