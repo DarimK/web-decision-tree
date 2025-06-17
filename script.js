@@ -88,7 +88,7 @@ animate()
 let initialPinchDistance = 1;
 let initialZoom = 1;
 const div = document.createElement("div");
-div.textContent = "3";
+div.textContent = "4";
 document.body.appendChild(div);
 function showError(callback) {
     try {
@@ -101,7 +101,7 @@ canvas.addEventListener("touchstart", (event) => {
     showError(() => {
         if (event.touches.length >= 1) {
             isDragging = true;
-            if (event.touches.length === 2) {
+            if (event.touches.length >= 2) {
                 const xDistance = event.touches[0].clientX - event.touches[1].clientX;
                 const yDistance = event.touches[0].clientY - event.touches[1].clientY;
                 div.textContent = `${xDistance} ${yDistance}`;
@@ -120,6 +120,9 @@ canvas.addEventListener("touchstart", (event) => {
 canvas.addEventListener("touchend", (event) => {
     if (event.touches.length === 0) {
         isDragging = false;
+    } else if (event.touches.length === 1) {
+        lastX = event.touches[0].clientX;
+        lastY = event.touches[0].clientY;
     }
 });
 canvas.addEventListener("touchmove", (event) => {
@@ -127,7 +130,7 @@ canvas.addEventListener("touchmove", (event) => {
         if (event.touches.length >= 1) {
             let currentX = event.touches[0].clientX;
             let currentY = event.touches[0].clientY;
-            if (event.touches.length === 2) {
+            if (event.touches.length >= 2) {
                 const xDistance = event.touches[0].clientX - event.touches[1].clientX;
                 const yDistance = event.touches[0].clientY - event.touches[1].clientY;
                 div.textContent = `${xDistance} ${yDistance}`;
