@@ -85,15 +85,16 @@ canvas.addEventListener("wheel", (event) => {
 });
 animate()
 
-let initialPinchDistance = 0;
+let initialPinchDistance = 1;
 let initialZoom = 1;
+const div = document.createElement("div");
+div.textContent = "3";
+document.body.appendChild(div);
 function showError(callback) {
     try {
         callback();
     } catch (e) {
-        const div = document.createElement("div");
         div.textContent = e.message;
-        document.body.appendChild(div);
     }
 }
 canvas.addEventListener("touchstart", (event) => {
@@ -103,6 +104,7 @@ canvas.addEventListener("touchstart", (event) => {
             if (event.touches.length === 2) {
                 const xDistance = event.touches[0].clientX - event.touches[1].clientX;
                 const yDistance = event.touches[0].clientY - event.touches[1].clientY;
+                div.textContent = `${xDistance} ${yDistance}`;
                 initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
                 initialZoom = zoom;
                 lastX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
@@ -115,9 +117,10 @@ canvas.addEventListener("touchstart", (event) => {
     });
     event.preventDefault();
 }, { passive: false });
-canvas.addEventListener("touchend", () => {
-    isDragging = false;
-    initialPinchDistance = 0;
+canvas.addEventListener("touchend", (event) => {
+    if (event.touches.length === 0) {
+        isDragging = false;
+    }
 });
 canvas.addEventListener("touchmove", (event) => {
     showError(() => {
@@ -127,6 +130,7 @@ canvas.addEventListener("touchmove", (event) => {
             if (event.touches.length === 2) {
                 const xDistance = event.touches[0].clientX - event.touches[1].clientX;
                 const yDistance = event.touches[0].clientY - event.touches[1].clientY;
+                div.textContent = `${xDistance} ${yDistance}`;
                 const distance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
                 zoom = initialZoom * (distance / initialPinchDistance);
                 currentX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
