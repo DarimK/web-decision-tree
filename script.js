@@ -87,50 +87,63 @@ animate()
 
 let initialPinchDistance = 0;
 let initialZoom = 1;
-canvas.addEventListener("touchstart", (event) => {
-    if (event.touches.length >= 1) {
-        isDragging = true;
-        if (event.touches.length === 2) {
-            const xDistance = event.touches[0].clientX - event.touches[1].clientX;
-            const yDistance = event.touches[0].clientY - event.touches[1].clientY;
-            initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
-            initialZoom = zoom;
-            lastX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-            lastY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-        } else {
-            lastX = event.touches[0].clientX;
-            lastY = event.touches[0].clientY;
-        }
+function showError(callback) {
+    try {
+        callback();
+    } catch (e) {
+        const div = document.createElement("div");
+        div.textContent = e.message;
+        document.body.appendChild(div);
     }
+}
+canvas.addEventListener("touchstart", (event) => {
+    showError(() => {
+        if (event.touches.length >= 1) {
+            isDragging = true;
+            if (event.touches.length === 2) {
+                const xDistance = event.touches[0].clientX - event.touches[1].clientX;
+                const yDistance = event.touches[0].clientY - event.touches[1].clientY;
+                initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
+                initialZoom = zoom;
+                lastX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+                lastY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+            } else {
+                lastX = event.touches[0].clientX;
+                lastY = event.touches[0].clientY;
+            }
+        }
+    });
     event.preventDefault();
-});
+}, { passive: false });
 canvas.addEventListener("touchend", () => {
     isDragging = false;
     initialPinchDistance = 0;
 });
 canvas.addEventListener("touchmove", (event) => {
-    if (event.touches.length >= 1) {
-        let currentX = event.touches[0].clientX;
-        let currentY = event.touches[0].clientY;
-        if (event.touches.length === 2) {
-            const xDistance = event.touches[0].clientX - event.touches[1].clientX;
-            const yDistance = event.touches[0].clientY - event.touches[1].clientY;
-            const distance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
-            zoom = initialZoom * (distance / initialPinchDistance);
-            currentX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-            currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+    showError(() => {
+        if (event.touches.length >= 1) {
+            let currentX = event.touches[0].clientX;
+            let currentY = event.touches[0].clientY;
+            if (event.touches.length === 2) {
+                const xDistance = event.touches[0].clientX - event.touches[1].clientX;
+                const yDistance = event.touches[0].clientY - event.touches[1].clientY;
+                const distance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
+                zoom = initialZoom * (distance / initialPinchDistance);
+                currentX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+                currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+            }
+            if (isDragging) {
+                const dx = currentX - lastX;
+                const dy = currentY - lastY;
+                cameraX -= dx / zoom;
+                cameraY -= dy / zoom;
+                lastX = currentX;
+                lastY = currentY;
+            }
         }
-        if (isDragging) {
-            const dx = currentX - lastX;
-            const dy = currentY - lastY;
-            cameraX -= dx / zoom;
-            cameraY -= dy / zoom;
-            lastX = currentX;
-            lastY = currentY;
-        }
-    }
+    });
     event.preventDefault();
-});
+}, { passive: false });
 
 
 //more testing
