@@ -89,7 +89,7 @@ let initialPinchDistance = 1;
 let initialZoom = 1;
 let lastTouchCount = 0;
 const div = document.createElement("div");
-div.textContent = "7";
+div.textContent = "8";
 document.body.appendChild(div);
 function showError(callback) {
     try {
@@ -123,24 +123,20 @@ function doubleTouchStart(event) {
 //     event.preventDefault();
 // }, { passive: false });
 canvas.addEventListener("touchend", (event) => {
-    if (event.touches.length === 0) {
-        // isDragging = false;
-    } else if (event.touches.length === 1) {
-        lastX = event.touches[0].clientX;
-        lastY = event.touches[0].clientY;
-        div.textContent = "amogus";
-    }
     lastTouchCount = event.touches.length;
 });
 canvas.addEventListener("touchmove", (event) => {
     if (event.touches.length > lastTouchCount) {
-        // isDragging = true;
         if (event.touches.length >= 2) {
             doubleTouchStart(event);
         } else {
             lastX = event.touches[0].clientX;
             lastY = event.touches[0].clientY;
         }
+    } else if (event.touches.length < lastTouchCount) {
+        lastX = event.touches[0].clientX;
+        lastY = event.touches[0].clientY;
+        div.textContent = "amogus";
     } else if (event.touches.length >= 1) {
         let currentX = event.touches[0].clientX;
         let currentY = event.touches[0].clientY;
@@ -153,14 +149,12 @@ canvas.addEventListener("touchmove", (event) => {
             currentX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
             currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
         }
-        // if (isDragging) {
-            const dx = currentX - lastX;
-            const dy = currentY - lastY;
-            cameraX -= dx / zoom;
-            cameraY -= dy / zoom;
-            lastX = currentX;
-            lastY = currentY;
-        // }
+        const dx = currentX - lastX;
+        const dy = currentY - lastY;
+        cameraX -= dx / zoom;
+        cameraY -= dy / zoom;
+        lastX = currentX;
+        lastY = currentY;
     }
     lastTouchCount = event.touches.length;
     event.preventDefault();
