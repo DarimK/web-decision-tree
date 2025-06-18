@@ -89,54 +89,35 @@ let initialPinchDistance = 1;
 let initialZoom = 1;
 let lastTouchCount = 0;
 const div = document.createElement("div");
-div.textContent = "8";
+div.textContent = "9";
 document.body.appendChild(div);
-function showError(callback) {
-    try {
-        callback();
-    } catch (e) {
-        div.textContent = e.message;
+function touchEnd(event) {
+    if (event.touches.length === 1) {
+        lastX = event.touches[0].clientX;
+        lastY = event.touches[0].clientY;
+        div.textContent = "amogus";
     }
 }
-function doubleTouchStart(event) {
-    const xDistance = event.touches[0].clientX - event.touches[1].clientX;
-    const yDistance = event.touches[0].clientY - event.touches[1].clientY;
-    div.textContent = `${xDistance} ${yDistance}`;
-    initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
-    initialZoom = zoom;
-    lastX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-    lastY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-}
-// canvas.addEventListener("touchstart", (event) => {
-//     showError(() => {
-//         if (event.touches.length >= 1) {
-//             isDragging = true;
-//             if (event.touches.length >= 2) {
-//                 doubleTouchStart(event);
-//             } else {
-//                 lastX = event.touches[0].clientX;
-//                 lastY = event.touches[0].clientY;
-//             }
-//         }
-//         lastTouchCount = event.touches.length;
-//     });
-//     event.preventDefault();
-// }, { passive: false });
 canvas.addEventListener("touchend", (event) => {
+    touchEnd(event);
     lastTouchCount = event.touches.length;
 });
 canvas.addEventListener("touchmove", (event) => {
     if (event.touches.length > lastTouchCount) {
         if (event.touches.length >= 2) {
-            doubleTouchStart(event);
+            const xDistance = event.touches[0].clientX - event.touches[1].clientX;
+            const yDistance = event.touches[0].clientY - event.touches[1].clientY;
+            div.textContent = `${xDistance} ${yDistance}`;
+            initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
+            initialZoom = zoom;
+            lastX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            lastY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
         } else {
             lastX = event.touches[0].clientX;
             lastY = event.touches[0].clientY;
         }
     } else if (event.touches.length < lastTouchCount) {
-        lastX = event.touches[0].clientX;
-        lastY = event.touches[0].clientY;
-        div.textContent = "amogus";
+        touchEnd(event);
     } else if (event.touches.length >= 1) {
         let currentX = event.touches[0].clientX;
         let currentY = event.touches[0].clientY;
