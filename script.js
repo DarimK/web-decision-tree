@@ -85,11 +85,12 @@ canvas.addEventListener("wheel", (event) => {
 });
 animate()
 
+const touchIds = new Set();
 let initialPinchDistance = 1;
 let initialZoom = 1;
 let lastTouchCount = 0;
 const div = document.createElement("div");
-div.textContent = "9";
+div.textContent = "10";
 document.body.appendChild(div);
 function touchEnd(event) {
     if (event.touches.length === 1) {
@@ -98,37 +99,58 @@ function touchEnd(event) {
         div.textContent = "amogus";
     }
 }
+function getTouches(event) {
+    const touches = [];
+    for (const touch of event.touches) {
+        if (touchIds.has(touch.identifier)) {
+            touches.push(touch);
+        }
+    }
+    return touches;
+}
+canvas.addEventListener("touchstart", (event) => {
+    for (const touch of event.changedTouches) {
+        touchIds.add(touch.identifier);
+    }
+    const touches = getTouches(event);
+    if (touches.length >= 2) {
+        const xDistance = touches[0].clientX - touches[1].clientX;
+        const yDistance = touches[0].clientY - touches[1].clientY;
+        div.textContent = `${xDistance} ${yDistance}`;
+        initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
+        initialZoom = zoom;
+        lastX = (touches[0].clientX + touches[1].clientX) / 2;
+        lastY = (touches[0].clientY + touches[1].clientY) / 2;
+    } else {
+        lastX = touches[0].clientX;
+        lastY = touches[0].clientY;
+    }
+    event.preventDefault();
+}, { passive: false });
 canvas.addEventListener("touchend", (event) => {
-    touchEnd(event);
-    lastTouchCount = event.touches.length;
+    for (const touch of event.changedTouches) {
+        touchIds.delete(touch.identifier);
+    }
+    const touches = getTouches(event);
+    if (touches.length === 1) {
+        lastX = touches[0].clientX;
+        lastY = touches[0].clientY;
+        div.textContent = "amogus";
+    }
 });
 canvas.addEventListener("touchmove", (event) => {
-    if (event.touches.length > lastTouchCount) {
-        if (event.touches.length >= 2) {
-            const xDistance = event.touches[0].clientX - event.touches[1].clientX;
-            const yDistance = event.touches[0].clientY - event.touches[1].clientY;
-            div.textContent = `${xDistance} ${yDistance}`;
-            initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
-            initialZoom = zoom;
-            lastX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-            lastY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-        } else {
-            lastX = event.touches[0].clientX;
-            lastY = event.touches[0].clientY;
-        }
-    } else if (event.touches.length < lastTouchCount) {
-        touchEnd(event);
-    } else if (event.touches.length >= 1) {
-        let currentX = event.touches[0].clientX;
-        let currentY = event.touches[0].clientY;
-        if (event.touches.length >= 2) {
-            const xDistance = event.touches[0].clientX - event.touches[1].clientX;
-            const yDistance = event.touches[0].clientY - event.touches[1].clientY;
+    const touches = getTouches(event);
+    if (touches.length >= 1) {
+        let currentX = touches[0].clientX;
+        let currentY = touches[0].clientY;
+        if (touches.length >= 2) {
+            const xDistance = touches[0].clientX - touches[1].clientX;
+            const yDistance = touches[0].clientY - touches[1].clientY;
             div.textContent = `${xDistance} ${yDistance}`;
             const distance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
             zoom = initialZoom * (distance / initialPinchDistance);
-            currentX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-            currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+            currentX = (touches[0].clientX + touches[1].clientX) / 2;
+            currentY = (touches[0].clientY + touches[1].clientY) / 2;
         }
         const dx = currentX - lastX;
         const dy = currentY - lastY;
@@ -137,7 +159,6 @@ canvas.addEventListener("touchmove", (event) => {
         lastX = currentX;
         lastY = currentY;
     }
-    lastTouchCount = event.touches.length;
     event.preventDefault();
 }, { passive: false });
 
