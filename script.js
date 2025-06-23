@@ -75,10 +75,6 @@ canvas.addEventListener("mousemove", (event) => {
         lastY = event.clientY;
     }
 });
-document.addEventListener("keypress", (e) => {
-    if (e.key === "1") zoom *= 0.98;
-    else if (e.key === "2") zoom *= 1.02;
-});
 canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
     zoom *= event.deltaY < 0 ? 1.1 : 0.9;
@@ -88,17 +84,6 @@ animate()
 const touchIds = new Set();
 let initialPinchDistance = 1;
 let initialZoom = 1;
-let lastTouchCount = 0;
-const div = document.createElement("div");
-div.textContent = "10";
-document.body.appendChild(div);
-function touchEnd(event) {
-    if (event.touches.length === 1) {
-        lastX = event.touches[0].clientX;
-        lastY = event.touches[0].clientY;
-        div.textContent = "amogus";
-    }
-}
 function getTouches(event) {
     const touches = [];
     for (const touch of event.touches) {
@@ -116,7 +101,6 @@ canvas.addEventListener("touchstart", (event) => {
     if (touches.length >= 2) {
         const xDistance = touches[0].clientX - touches[1].clientX;
         const yDistance = touches[0].clientY - touches[1].clientY;
-        div.textContent = `${xDistance} ${yDistance}`;
         initialPinchDistance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
         initialZoom = zoom;
         lastX = (touches[0].clientX + touches[1].clientX) / 2;
@@ -135,7 +119,6 @@ canvas.addEventListener("touchend", (event) => {
     if (touches.length === 1) {
         lastX = touches[0].clientX;
         lastY = touches[0].clientY;
-        div.textContent = "amogus";
     }
 });
 canvas.addEventListener("touchmove", (event) => {
@@ -146,7 +129,6 @@ canvas.addEventListener("touchmove", (event) => {
         if (touches.length >= 2) {
             const xDistance = touches[0].clientX - touches[1].clientX;
             const yDistance = touches[0].clientY - touches[1].clientY;
-            div.textContent = `${xDistance} ${yDistance}`;
             const distance = Math.sqrt(xDistance ** 2 + yDistance ** 2);
             zoom = initialZoom * (distance / initialPinchDistance);
             currentX = (touches[0].clientX + touches[1].clientX) / 2;
