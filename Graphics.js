@@ -161,28 +161,27 @@ class Graphics {
         const rows = this.#getTextRows(text, maxWidth);
         const ids = [];
         let rowY = y;
+        let largestWidth = 0;
 
         for (const row of rows) {
+            const xL = x - row.metrics.actualBoundingBoxLeft;
+            const xU = x + row.metrics.actualBoundingBoxRight;
             ids.push(this.#add({
                 type: "textRow", x, font, color, zIndex, textAlign,
                 y: rowY,
                 text: row.text,
-                bounds: {
-                    xL: x - row.metrics.actualBoundingBoxLeft,
-                    xU: x + row.metrics.actualBoundingBoxRight,
-                    yL: rowY,
-                    yU: rowY + height
-                }
+                bounds: { xL, xU, yL: rowY, yU: rowY + height }
             }));
 
             rowY += height * lineHeight;
+            if (xU - xL > largestWidth) largestWidth = xU - xL;
         }
 
         const lastRowHeight = rows[rows.length - 1].metrics.actualBoundingBoxDescent -
             rows[rows.length - 1].metrics.actualBoundingBoxAscent;
         return this.#add({
-            type: "text", ids, x, y, zIndex,
-            width: maxWidth,
+            type: "text", ids, x, y, color, zIndex,
+            width: largestWidth,
             height: rowY - y - height * lineHeight + lastRowHeight
         });
     }
