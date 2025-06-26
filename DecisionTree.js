@@ -50,6 +50,7 @@ class DTNode {
 
 class DTBuilder {
     //ngl make small change to dt (hunts) to work for dtreg cuz its just average label
+    //maybe add tracking flag to track entropy, class dist, etc, at each node
     static sum(nums) {
         let acc = 0;
         for (const n of nums) {
@@ -184,7 +185,7 @@ class DTBuilder {
         const conditions = DTBuilder.splitConditions(options);
         const parentFreq = DTBuilder.countLabels(y, labels);
         let bestCondition = undefined;
-        let bestGain = 0;
+        let bestGain = -Infinity;
         for (let condIdx = 0; condIdx < conditions.length; condIdx++) {
             const childrenFreq = DTBuilder.splitAndCount(X, y, types[conditions[condIdx].attribute], labels, conditions[condIdx]);
             const splitGain = DTBuilder.infoGain(parentFreq, childrenFreq);

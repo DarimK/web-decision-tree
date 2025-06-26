@@ -26,10 +26,13 @@ class Graphics {
     }
 
     resize(width, height) {
+        this.stateChanged = "figure";
         this.canvas.width = width ?? this.canvas.width;
         this.canvas.height = height ?? this.canvas.height;
-        this.cache.canvas.width = this.canvas.width * 4;
-        this.cache.canvas.height = this.canvas.height * 4;
+        if (this.#caching) {
+            this.cache.canvas.width = this.canvas.width * 4;
+            this.cache.canvas.height = this.canvas.height * 4;
+        }
     }
 
     #updateCacheData() {
@@ -100,24 +103,36 @@ class Graphics {
         this.#remove(id);
     }
 
-    #getTextRows(text, maxWidth) {
+    #measureText(text, font, textAlign) {
+        const ratio = font.size / 10000;
+        this.ctx.font = `${font.style} ${font.weight} 10000px ${font.family}`;
+        this.ctx.textAlign = textAlign;
+        const metrics = this.ctx.measureText(text);
+        const newMetrics = {};
+        for (const m in metrics) {
+            newMetrics[m] = metrics[m] * ratio;
+        }
+        return newMetrics;
+    }
+
+    #getTextRows(text, font, textAlign, maxWidth) {
         const rows = [];
 
         for (const sentence of text.split("\n")) {
             const words = sentence.split(" ");
             let newText = words[0];
-            let newMetrics = this.ctx.measureText(newText);
+            let newMetrics = this.#measureText(newText, font, textAlign);
 
             for (let i = 1; i < words.length; i++) {
                 const testText = newText + " " + words[i];
-                const testMetrics = this.ctx.measureText(testText);
+                const testMetrics = this.#measureText(testText, font, textAlign);
                 if (testMetrics.width < maxWidth) {
                     newText = testText;
                     newMetrics = testMetrics;
                 } else {
                     rows.push({ text: newText, metrics: newMetrics });
                     newText = words[i];
-                    newMetrics = this.ctx.measureText(newText);
+                    newMetrics = this.#measureText(newText, font, textAlign);
                 }
             }
 
@@ -153,12 +168,14 @@ class Graphics {
         });
     }
 
-    addText(x, y, text, font = "16px sans-serif", maxWidth = Infinity, color = "black", zIndex = 0, lineHeight = 1, textAlign = "center") {
-        this.ctx.font = font;
-        this.ctx.textAlign = textAlign;
-        const metrics = this.ctx.measureText("");
+    addText(x, y, text, font = {}, maxWidth = Infinity, color = "black", zIndex = 0, lineHeight = 1, textAlign = "center") {
+        font.style = font.style ?? "normal";
+        font.weight = font.weight ?? "normal";
+        font.size = font.size ?? 10;
+        font.family = font.family ?? "system-ui, sans-serif";
+        const metrics = this.#measureText("", font, textAlign);
         const height = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
-        const rows = this.#getTextRows(text, maxWidth);
+        const rows = this.#getTextRows(text, font, textAlign, maxWidth);
         const ids = [];
         let rowY = y;
         let largestWidth = 0;
@@ -251,7 +268,7 @@ class Graphics {
                     ctx.lineTo(figure.x2, figure.y2);
                     ctx.stroke();
                 } else if (figure.type === "textRow") {
-                    ctx.font = figure.font;
+                    ctx.font = `${figure.font.style} ${figure.font.weight} ${figure.font.size}px ${figure.font.family}`;
                     ctx.textAlign = figure.textAlign;
                     ctx.fillText(figure.text, figure.x, figure.y);
                 }
