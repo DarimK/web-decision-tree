@@ -84,8 +84,8 @@ function readCSV(file, callback) {
 }
 
 function cleanData(X, y) {
-    X = X.map((row) => row.map((val) => Number(val) ? Number(val) : val));
-    y = y.map((val) => Number(val) ? Number(val) : val);
+    X = X.map((row) => row.map((val) => isNaN(Number(val)) ? val : Number(val)));
+    y = y.map((val) => isNaN(Number(val)) ? val : Number(val));
     return [X, y];
 }
 
@@ -105,19 +105,19 @@ function trainTestSplit(X, y, testSize = 0.2, random = true) {
         shuffle(idxs);
     }
 
-    const xTest = [], yTest = [];
+    const XTest = [], yTest = [];
     for (let i = 0; i < Math.floor(X.length * testSize); i++) {
-        xTest.push(X[idxs[i]]);
+        XTest.push(X[idxs[i]]);
         yTest.push(y[idxs[i]]);
     }
 
-    const xTrain = [], yTrain = [];
+    const XTrain = [], yTrain = [];
     for (let i = Math.floor(X.length * testSize); i < X.length; i++) {
-        xTrain.push(X[idxs[i]]);
+        XTrain.push(X[idxs[i]]);
         yTrain.push(y[idxs[i]]);
     }
 
-    return [xTrain, xTest, yTrain, yTest];
+    return [XTrain, XTest, yTrain, yTest];
 }
 
 function accuracy(predictions, y) {
@@ -126,4 +126,54 @@ function accuracy(predictions, y) {
         matches += predictions[i] === y[i] ? 1 : 0;
     }
     return matches / y.length;
+}
+
+function addNode(graphics, type, x, y, size, text, padding, color) {
+    const figId = graphics.addText(x, y, text, { size }, size * 8, undefined, 99);
+    const fig = graphics.figures[figId];
+    if (type === "rect") {
+        return graphics.addRectangle(
+            fig.x,
+            fig.y + fig.height / 2,
+            fig.width * 1.05 + fig.width * padding,
+            fig.height + fig.width * 0.05 + fig.height * padding,
+            fig.width * 0.025,
+            color,
+            undefined,
+            fig.zIndex - 1
+        );
+    } else if (type === "circle") {
+        const radius = Math.sqrt((fig.width / 2) ** 2 + (fig.height / 2) ** 2);
+        return graphics.addCircle(
+            fig.x,
+            fig.y + fig.height / 2,
+            radius * 1.05 + radius * padding,
+            radius * 0.05,
+            color,
+            undefined,
+            fig.zIndex - 1
+        );
+    }
+    return figId;
+}
+
+function addLine(graphics, fromId, toId, width, color) {
+    const fromFig = graphics.figures[fromId];
+    const toFig = graphics.figures[toId];
+    graphics.addLine(fromFig.x, fromFig.y, toFig.x, toFig.y, width, color, toFig.zIndex - 2);
+}
+
+function displayTree(graphics, tree, names) {
+    function displayTreeH(node, x, y, size) {
+        let id;
+        if (node.label === undefined) {
+            id = addNode(graphics, "rect", x, y, size, `${names[node.condition.attribute]} ${tree.types[node.condition.attribute] === DecisionTree.TYPES.ORDERED ? "<=" : "=="} ${node.condition.value}`, 0.2, "#af6f2f");
+            addLine(graphics, id, displayTreeH(node.leftChild, x - size * 6 - size * Math.random() * 2, y - size * 6 - size * Math.random() * 8, size / 2), size / 2, "#7f4f1f");
+            addLine(graphics, id, displayTreeH(node.rightChild, x + size * 6 + size * Math.random() * 2, y - size * 6 - size * Math.random() * 8, size / 2), size / 2, "#7f4f1f");
+        } else {
+            id = addNode(graphics, "circle", x, y, size * 2, `${node.label}`, 0.1, "#2faf0f");
+        }
+        return id;
+    }
+    displayTreeH(tree.root, 0, 0, 10000);
 }
