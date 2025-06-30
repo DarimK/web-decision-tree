@@ -1,9 +1,19 @@
-let tree, X, y, XTest, XTrain, yTest, yTrain;
+const canvas = document.getElementById("canvas");
+const graphics = new Graphics(canvas);
+let tree, X, y, names, XTest, XTrain, yTest, yTrain;
+let cameraX = 0, cameraY = 0, zoom = 0.01;
+
+function resize() {
+    graphics.resize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener("resize", resize);
+resize();
 
 document.getElementById("load").addEventListener("click", () => {
     const file = document.getElementById("file").files[0];
     if (file) {
         readCSV(file, (data) => {
+            names = data.names;
             [X, y] = cleanData(data.X, data.y);
         });
     }
@@ -20,14 +30,18 @@ document.getElementById("train").addEventListener("click", () => {
     } else {
         tree = new DecisionTree(XTrain, yTrain);
     }
+
+    graphics.reset();
+    displayTree(graphics, tree, names);
 });
 
 document.getElementById("test").addEventListener("click", () => {
-    document.getElementById("accuracy").textContent = `Accuracy ${accuracy(tree.evaluate(XTest), yTest)}`;
+    const accuracyScore = XTest.length > 0 ? accuracy(tree.evaluate(XTest), yTest) : accuracy(tree.evaluate(XTrain), yTrain);
+    document.getElementById("accuracy").textContent = `Accuracy ${accuracyScore}`;
 });
 
 document.getElementById("classify").addEventListener("click", () => {
-    const instance = document.getElementById("instance").value.split(",").map((val) => Number(val) ? Number(val) : val);
+    const instance = document.getElementById("instance").value.split(",").map((val) => isNaN(Number(val)) ? val : Number(val));
     const classification = tree.evaluate(instance);
     document.getElementById("classification").textContent = `Classification: ${classification}`;
 });
@@ -36,13 +50,6 @@ document.getElementById("classify").addEventListener("click", () => {
 //testing
 let isDragging = false;
 let lastX = 0, lastY = 0;
-let cameraX = 0, cameraY = 0;
-let zoom = 1;
-const canvas = document.createElement("canvas");
-canvas.width = 1000;
-canvas.height = 600;
-document.body.appendChild(canvas);
-const graphics = new Graphics(canvas);
 let lastMs = 0;
 
 function animate() {
@@ -214,7 +221,7 @@ for (i = 0; i < 3250; i++) {
         xy.x,
         xy.y,
         "h" + Array.from({ length: Math.floor(i / 100) + 1 }, () => "i").join(" "),
-        `700 ${Math.floor(Math.random() * 15) + 5}px sans-serif`,
+        { weight: 700, size: Math.floor(Math.random() * 15) + 5 },
         size,
         `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`,
         99
@@ -239,3 +246,7 @@ for (i = 0; i < 250; i++) {
     )
 }
 console.log(Date.now() - start);
+
+X = Array.from({ length: 5000 }, () => Array.from({ length: 5 }, () => Math.floor(Math.random() * 1000)));
+y = Array.from({ length: 5000 }, (k, i) => X[i].reduce((a, b) => a + b) > 3000 ? 1 : 0);
+names = ["a", "b", "c", "d", "e"];
