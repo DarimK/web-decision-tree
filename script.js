@@ -1,7 +1,7 @@
 const canvas = document.getElementById("canvas");
 const graphics = new Graphics(canvas);
-let tree, X, y, names, XTest, XTrain, yTest, yTrain;
-let cameraX = 0, cameraY = 0, zoom = 0.01;
+let tree, X, y, names, types, XTest, XTrain, yTest, yTrain;
+let cameraX = 0, cameraY = 10000, zoom = 0.01;
 
 function resize() {
     graphics.resize(window.innerWidth, window.innerHeight);
@@ -13,26 +13,29 @@ document.getElementById("load").addEventListener("click", () => {
     const file = document.getElementById("file").files[0];
     if (file) {
         readCSV(file, (data) => {
+            types = undefined;
             names = data.names;
             [X, y] = cleanData(data.X, data.y);
         });
     }
 });
 
-document.getElementById("train").addEventListener("click", () => {
-    const testSize = Number(document.getElementById("test-size").value) || 0.2;
+function train(testSize) {
     [XTest, XTrain, yTest, yTrain] = trainTestSplit(X, y, testSize);
 
     if (XTest.length > 100000) {
-        tree = new DecisionTree(XTrain, yTrain, undefined, undefined, undefined, Math.log10);
+        tree = new DecisionTree(XTrain, yTrain, types, undefined, undefined, Math.log10);
     } else if (XTest.length > 5000) {
-        tree = new DecisionTree(XTrain, yTrain, undefined, undefined, undefined, Math.sqrt);
+        tree = new DecisionTree(XTrain, yTrain, types, undefined, undefined, Math.sqrt);
     } else {
-        tree = new DecisionTree(XTrain, yTrain);
+        tree = new DecisionTree(XTrain, yTrain, types);
     }
 
     graphics.reset();
     displayTree(graphics, tree, names);
+}
+document.getElementById("train").addEventListener("click", () => {
+    train(Number(document.getElementById("test-size").value) || 0.5);
 });
 
 document.getElementById("test").addEventListener("click", () => {
@@ -152,101 +155,19 @@ canvas.addEventListener("touchmove", (event) => {
 }, { passive: false });
 
 
-//more testing
-let start = Date.now();
-let size = 1e8;
-let center = { x: 0, y: 0 };
-for (let i = 0; i < 23; i++) {
-    graphics.addCircle(
-        center.x,
-        center.y,
-        size + size / 10,
-        size / 10,
-        `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`
-    )
-    center.x += Math.random() * size / Math.sqrt(2) - size / Math.sqrt(2) / 2;
-    center.y += Math.random() * size / Math.sqrt(2) - size / Math.sqrt(2) / 2
-    size /= 2;
-}
-console.log(Date.now() - start);
-
-const radius = 5000;
-function randomXY() {
-    let angle = Math.random() * 2 * Math.PI;
-    let distance = Math.sqrt(Math.random()) * radius;
-    let x = Math.cos(angle) * distance;
-    let y = Math.sin(angle) * distance;
-    return { x: x, y: y };
-}
-
-start = Date.now();
-for (i = 0; i < 3250; i++) {
-    let sizeX = Math.random() * 90 + 10;
-    let sizeY = Math.random() * 90 + 10;
-    let xy = randomXY();
-    graphics.addRectangle(
-        xy.x,
-        xy.y,
-        sizeX,
-        sizeY,
-        5,
-        `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`,
-        undefined,
-        99 - Math.floor(Math.min(sizeX, sizeY))
-    )
-}
-console.log(Date.now() - start);
-
-start = Date.now();
-for (i = 0; i < 3250; i++) {
-    let size = Math.random() * 95 + 5;
-    let xy = randomXY();
-    graphics.addCircle(
-        xy.x,
-        xy.y,
-        size,
-        5,
-        `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`,
-        undefined,
-        99 - Math.floor(size)
-    )
-}
-console.log(Date.now() - start);
-
-start = Date.now();
-for (i = 0; i < 3250; i++) {
-    let size = Math.random() * 200 + 50;
-    let xy = randomXY();
-    graphics.addText(
-        xy.x,
-        xy.y,
-        "h" + Array.from({ length: Math.floor(i / 100) + 1 }, () => "i").join(" "),
-        { weight: 700, size: Math.floor(Math.random() * 15) + 5 },
-        size,
-        `#${(Math.floor(Math.random() * 256 ** 3)).toString(16).padStart(6, "0")}`,
-        99
-    )
-}
-console.log(Date.now() - start);
-
-const figCount = Object.keys(graphics.figures).length;
-start = Date.now();
-for (i = 0; i < 250; i++) {
-    let fig1 = graphics.figures[Math.floor(Math.random() * figCount)];
-    let fig2 = graphics.figures[Math.floor(Math.random() * figCount)];
-    let size = Math.random() * 10;
-    graphics.addLine(
-        fig1.x,
-        fig1.y,
-        fig2.x,
-        fig2.y,
-        size,
-        fig1.color,
-        Math.min(fig1.zIndex, fig2.zIndex) - 1
-    )
-}
-console.log(Date.now() - start);
-
-X = Array.from({ length: 5000 }, () => Array.from({ length: 5 }, () => Math.floor(Math.random() * 1000)));
-y = Array.from({ length: 5000 }, (k, i) => X[i].reduce((a, b) => a + b) > 3000 ? 1 : 0);
-names = ["a", "b", "c", "d", "e"];
+X = [
+    [0, 0, 0],
+    [0, 0, 1],
+    [0, 1, 0],
+    [0, 1, 1],
+    [1, 0, 0],
+    [1, 0, 1],
+    [1, 1, 0],
+    [1, 1, 1]
+];
+y = [0, 1, 1, 0, 1, 0, 0, 1];
+names = ["Input A", "Input B", "Input C"];
+types = [DecisionTree.TYPES.UNORDERED, DecisionTree.TYPES.UNORDERED, DecisionTree.TYPES.UNORDERED];
+train(1);
+graphics.addText(0, 15000, "drag to move\nscroll/pinch to zoom\nupload data to create your own tree", { size: 2500 });
+graphics.addText(4e6 * Math.random() - 2e6, 4e6 * Math.random() - 2e6, "hi i", { size: 10000, weight: 700 });
