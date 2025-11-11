@@ -1,7 +1,7 @@
 const canvas = document.getElementById("canvas");
 const graphics = new Graphics(canvas);
 let tree, X, y, names, types, XTest, XTrain, yTest, yTrain;
-let cameraX = 0, cameraY = 10000, zoom = 0.01;
+let cameraX = 0, cameraY = 5000, zoom = 0.02;
 
 function resize() {
     graphics.resize(window.innerWidth, window.innerHeight);
@@ -169,5 +169,5 @@ y = [0, 1, 1, 0, 1, 0, 0, 1];
 names = ["Input A", "Input B", "Input C"];
 types = [DecisionTree.TYPES.UNORDERED, DecisionTree.TYPES.UNORDERED, DecisionTree.TYPES.UNORDERED];
 train(1);
-graphics.addText(0, 15000, "drag to move\nscroll/pinch to zoom\nupload data to create your own tree", { size: 2500 });
+graphics.addText(0, 9000, "drag to move\nscroll/pinch to zoom\nupload data to create your own tree", { size: 1500 });
 graphics.addText(4e6 * Math.random() - 2e6, 4e6 * Math.random() - 2e6, "hi i", { size: 10000, weight: 700 });

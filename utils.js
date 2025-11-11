@@ -175,5 +175,8 @@ function displayTree(graphics, tree, names) {
         }
         return id;
     }
-    displayTreeH(tree.root, 0, 0, 10000);
+    
+    displayTreeH(tree.root, 0, 0, 5000);
+    graphics.addText(-15000, -6000, "true", { size: 2500 });
+    graphics.addText(15000, -6000, "false", { size: 2500 });
 }
